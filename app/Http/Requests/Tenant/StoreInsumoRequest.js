@@ -52,6 +52,13 @@ class StoreInsumoRequest extends BaseRequest {
 
             body('stock_minimo').optional().isNumeric().withMessage('El stock mínimo debe ser numérico'),
 
+            // Solo se envía desde el modal de edición cuando el usuario corrige las
+            // existencias; el servicio lo traduce a un movimiento de ajuste.
+            body('stock_actual')
+                .optional({ values: 'falsy' })
+                .isFloat({ min: 0 })
+                .withMessage('Las existencias actuales deben ser un número mayor o igual a 0'),
+
             body('rendimiento_pct')
                 .optional()
                 .isNumeric()

@@ -173,6 +173,24 @@ class InsumoService {
 
         const updateData = construirDatosActualizacion(data, insumo);
         await InsumoRepository.update(id, tenantId, updateData);
+
+        // Ajuste de existencias desde el modal de edición: si el usuario cambió
+        // "existencias actuales", se registra un movimiento tipo 'ajuste' por la
+        // diferencia (conteo físico). Nunca se sobreescribe stock_actual directo,
+        // así queda trazado igual que cualquier otro movimiento.
+        if (data.stock_actual !== undefined && data.stock_actual !== null && data.stock_actual !== '') {
+            const objetivo = Number.parseFloat(data.stock_actual);
+            const actual = Number.parseFloat(insumo.stock_actual) || 0;
+            if (!Number.isNaN(objetivo) && objetivo >= 0 && Math.abs(objetivo - actual) > 1e-6) {
+                const InventarioService = require('./InventarioService');
+                await InventarioService.registrarAjuste(tenantId, {
+                    insumo_id: id,
+                    cantidad: objetivo - actual,
+                    referencia: 'Conteo físico (edición de insumo)'
+                });
+            }
+        }
+
         return { message: 'Insumo actualizado' };
     }
 
@@ -181,12 +199,28 @@ class InsumoService {
         if (!insumo) {
             throw new Error('Insumo no encontrado');
         }
+
+        // Si el insumo está en alguna receta es un uso real: no se borra, se avisa
+        // en cuáles productos está para que el usuario lo quite primero.
+        const recetas = await InsumoRepository.findRecetasQueUsan(id, tenantId);
+        if (recetas.length > 0) {
+            const nombres = [...new Set(recetas.map(r => r.producto_nombre || r.nombre_receta).filter(Boolean))];
+            const lista = nombres.slice(0, 5).join(', ');
+            throw new Error(
+                `No se puede eliminar "${insumo.nombre}" porque está en la receta de: ${lista}` +
+                    (nombres.length > 5 ? ` y ${nombres.length - 5} más.` : '.') +
+                    ' Quítalo de esas recetas primero.'
+            );
+        }
+
         try {
-            await InsumoRepository.delete(id, tenantId);
+            // Sin recetas: se borra el insumo y su bitácora de movimientos de
+            // inventario (compras/salidas/ajustes) en una sola transacción.
+            await InsumoRepository.deleteConHistorial(id, tenantId);
         } catch (e) {
             if (e.code === 'ER_ROW_IS_REFERENCED_2' || e.code === 'ER_ROW_IS_REFERENCED') {
                 throw new Error(
-                    'No se puede eliminar este insumo porque ya tiene movimientos de inventario (compras/salidas) o está usado en una receta. Ajusta su stock a 0 y déjalo sin usar en recetas, o simplemente no lo uses más.',
+                    `No se puede eliminar "${insumo.nombre}" porque otra parte del sistema aún lo referencia. Déjalo sin usar en lugar de borrarlo.`,
                     { cause: e }
                 );
             }

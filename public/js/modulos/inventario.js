@@ -385,6 +385,8 @@ async function abrirEditarInsumo(id) {
         document.getElementById('editCategoriaId').value = item.categoria_id || '';
         document.getElementById('editProveedorId').value = item.proveedor_id || '';
         document.getElementById('editUnidadBase').value = item.unidad_base || 'g';
+        document.getElementById('editStockActual').value = Number.parseFloat(item.stock_actual) || 0;
+        document.getElementById('editStockActual').dataset.original = Number.parseFloat(item.stock_actual) || 0;
         document.getElementById('editStockMinimo').value = item.stock_minimo || 0;
 
         document.getElementById('editCantidadCompra').value = item.cantidad_compra || 1;
@@ -422,6 +424,10 @@ document.getElementById('btnActualizarInsumo').addEventListener('click', async (
     const id = document.getElementById('editInsumoId').value;
     const btn = document.getElementById('btnActualizarInsumo');
 
+    const stockActualEl = document.getElementById('editStockActual');
+    const stockActualNuevo = Number.parseFloat(stockActualEl.value);
+    const stockActualOriginal = Number.parseFloat(stockActualEl.dataset.original || '0') || 0;
+
     const payload = {
         nombre: document.getElementById('editNombre').value.trim(),
         codigo: document.getElementById('editCodigo').value.trim(),
@@ -435,6 +441,11 @@ document.getElementById('btnActualizarInsumo').addEventListener('click', async (
         unidad_medida_id: document.getElementById('editUnidadMedidaId').value || null,
         precio_venta: MoneyInput.parse(document.getElementById('editPrecioVenta').value)
     };
+
+    // Solo se envía si el usuario lo cambió: el backend registra un ajuste por la diferencia.
+    if (!Number.isNaN(stockActualNuevo) && Math.abs(stockActualNuevo - stockActualOriginal) > 1e-6) {
+        payload.stock_actual = stockActualNuevo;
+    }
 
     if (!payload.nombre || !payload.codigo) {
         alertError('Campos requeridos', 'Por favor completa el nombre y el código.');
@@ -456,7 +467,7 @@ document.getElementById('btnActualizarInsumo').addEventListener('click', async (
 async function eliminarInsumo(id, nombre) {
     const result = await Swal.fire({
         title: '¿Eliminar insumo?',
-        text: `¿Estás seguro de que deseas eliminar "${nombre}"? Esta acción no se puede deshacer y puede afectar a las recetas que lo utilicen.`,
+        text: `Se eliminará "${nombre}" junto con su historial de movimientos de inventario. Si está usado en alguna receta, el sistema no permitirá borrarlo.`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',

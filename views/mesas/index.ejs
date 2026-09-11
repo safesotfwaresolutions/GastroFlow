@@ -53,10 +53,10 @@
                 </div>
             </div>
 
-            <!-- Sección de Mesas Virtuales (WhatsApp / Domicilios) -->
+            <!-- Sección de Mesas Virtuales (pedidos para llevar / domicilios enviados desde el POS) -->
             <% if (typeof mesasVirtuales !=='undefined' && mesasVirtuales.length > 0) { %>
                 <div class="mb-5">
-                    <h5 class="mb-3 text-primary fw-bold"><i class="bi bi-whatsapp me-2"></i>Pedidos WhatsApp / Domicilios</h5>
+                    <h5 class="mb-3 text-primary fw-bold"><i class="bi bi-bag-check me-2"></i>Pedidos para Llevar / Domicilios</h5>
                     <%- include('_grid', { mesas: mesasVirtuales }) %>
                     <hr class="my-4">
                 </div>

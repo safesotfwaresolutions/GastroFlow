@@ -86,7 +86,7 @@ $(document).ready(function () {
         }
         return {
             icon: 'info',
-            title: isQR ? 'Nuevo pedido QR' : 'Nuevo pedido WhatsApp',
+            title: isQR ? 'Nuevo pedido QR' : 'Nuevo pedido',
             text: 'Actualizando mesas...'
         };
     }

@@ -214,8 +214,8 @@
                     </select>
                 </div>
 
-                <div class="row g-3 mb-3">
-                    <div class="col-6">
+                <div class="row g-3 mb-1">
+                    <div class="col-md-4">
                         <label class="form-label fw-semibold">Unidad</label>
                         <select class="form-select" id="editUnidadBase">
                             <option value="g">g (gramos)</option>
@@ -223,10 +223,19 @@
                             <option value="UND">UND (unidades)</option>
                         </select>
                     </div>
-                    <div class="col-6">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Existencias actuales</label>
+                        <input type="number" step="0.0001" class="form-control" id="editStockActual" min="0">
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label fw-semibold">Stock mínimo</label>
                         <input type="number" step="0.01" class="form-control" id="editStockMinimo" value="0" min="0">
                     </div>
+                </div>
+                <div class="form-text mb-3">
+                    Si cambias las <strong>existencias actuales</strong>, el sistema registra un
+                    <strong>ajuste</strong> por la diferencia (conteo físico), sin perder el historial.
+                    Para compras usa "Registrar Compra / Entrada".
                 </div>
 
                 <!-- ─── Sección avanzada (costeo) ─── -->

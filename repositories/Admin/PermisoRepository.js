@@ -43,7 +43,7 @@ class PermisoRepository {
                 }
             }
 
-            // Si no está en sección fija, agrupar por prefijo (p.ej. "whatsapp.ver" -> "Whatsapp")
+            // Si no está en sección fija, agrupar por prefijo (p.ej. "soporte.ver" -> "Soporte")
             if (!found) {
                 const prefix = p.nombre.split('.')[0];
                 const seccionName = prefix.charAt(0).toUpperCase() + prefix.slice(1);

@@ -47,8 +47,6 @@ const PERMISSION_TO_MODULE = {
     'ventas_evento.realizar': 'eventos',
     'proveedores.ver': 'proveedores',
     'proveedores.editar': 'proveedores',
-    'whatsapp.ver': 'configuracion',
-    'whatsapp.ajustes': 'configuracion',
     'caja.ver': 'caja',
     'caja.abrir_cerrar': 'caja',
     'caja.movimientos': 'caja',

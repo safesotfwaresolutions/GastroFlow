@@ -179,6 +179,49 @@ class InsumoRepository {
         const [result] = await db.query('DELETE FROM insumos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
         return result;
     }
+
+    /**
+     * Recetas (por nombre de producto) que usan este insumo. Sirve para bloquear
+     * el borrado con un mensaje claro en vez de un error de llave foránea.
+     * @returns {Promise<Array<{ nombre_receta: string, producto_nombre: string }>>}
+     */
+    static async findRecetasQueUsan(id, tenantId) {
+        const [rows] = await db.query(
+            `SELECT r.nombre_receta, p.nombre AS producto_nombre
+             FROM receta_ingredientes ri
+             JOIN recetas r ON r.id = ri.receta_id
+             LEFT JOIN productos p ON p.id = r.producto_id
+             WHERE ri.insumo_id = ? AND r.tenant_id = ?`,
+            [id, tenantId]
+        );
+        return rows;
+    }
+
+    /**
+     * Borra el insumo junto con su bitácora de movimientos de inventario, en una
+     * transacción. Se usa cuando el insumo NO está en ninguna receta: sus
+     * movimientos son solo su propia historia (compras/salidas/ajustes) y no
+     * tiene sentido conservarlos si el insumo desaparece. Los enlaces desde
+     * opciones_modificador son ON DELETE SET NULL, así que no bloquean.
+     */
+    static async deleteConHistorial(id, tenantId) {
+        const conn = await db.getConnection();
+        try {
+            await conn.beginTransaction();
+            await conn.query('DELETE FROM movimientos_inventario WHERE insumo_id = ? AND tenant_id = ?', [
+                id,
+                tenantId
+            ]);
+            const [result] = await conn.query('DELETE FROM insumos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+            await conn.commit();
+            return result;
+        } catch (e) {
+            await conn.rollback();
+            throw e;
+        } finally {
+            conn.release();
+        }
+    }
 }
 
 module.exports = InsumoRepository;

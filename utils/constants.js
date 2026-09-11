@@ -111,7 +111,6 @@ const PERMISSION_SECTIONS = {
     Predicción: ['prediccion.ver'],
     Perfil: ['perfil.ver', 'perfil.editar'],
     Reportes: ['reporte_mensual.test'],
-    WhatsApp: ['whatsapp.ver', 'whatsapp.ajustes'],
     Proveedores: ['proveedores.ver', 'proveedores.editar'],
     POS: ['pos.ver', 'pos.vender', 'pos.nombrar_cliente'],
     Clasificación: ['clasificacion.ver']

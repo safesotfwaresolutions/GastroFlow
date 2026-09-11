@@ -43,6 +43,6 @@ Si un grupo de modificadores tiene `descuenta_inventario = 1` y sus opciones est
 
 ---
 
-### 6. Bugs conocidos (pendientes de arreglo)
-1. **No deja eliminar un insumo recién creado con stock inicial:** el "Stock inicial" crea un `movimientos_inventario` con FK `ON DELETE RESTRICT` → el borrado se bloquea. Fix propuesto: en `InsumoService.delete`, si el insumo no está en `receta_ingredientes`, borrar sus movimientos y luego el insumo (transaccional).
-2. **El modal de edición de insumo no permite corregir las existencias actuales** (solo el stock mínimo). Fix propuesto: campo "Existencias actuales" que registre un `ajuste` por la diferencia (conteo físico).
+### 6. Borrado y corrección de existencias
+* **Borrado (`InsumoService.delete`):** si el insumo está en una o más recetas, se **bloquea** con un mensaje que nombra los productos afectados. Si no está en ninguna receta, se borra el insumo **junto con su bitácora de `movimientos_inventario`** en una transacción (`InsumoRepository.deleteConHistorial`). Los enlaces desde `opciones_modificador` son `ON DELETE SET NULL` y no bloquean.
+* **Corregir existencias:** el modal de edición tiene el campo **"Existencias actuales"**. Si se cambia, `InsumoService.update` registra un movimiento tipo `ajuste` por la diferencia (conteo físico) — nunca sobrescribe `stock_actual` directamente, para conservar la trazabilidad. Para compras se sigue usando "Registrar Compra / Entrada".
