@@ -119,6 +119,7 @@
     "mysql2": "^3.14.2",
     "node-cron": "^4.2.1",
     "nodemailer": "^8.0.1",
+    "pdfmake": "^0.3.11",
     "puppeteer": "^24.37.5",
     "qrcode": "^1.5.4",
     "winston": "^3.19.0"

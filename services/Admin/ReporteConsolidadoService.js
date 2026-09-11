@@ -1,6 +1,17 @@
-const ejs = require('ejs');
-const path = require('path');
-const { renderPdf } = require('../Shared/PdfBrowser');
+const PdfMaker = require('../Shared/PdfMaker');
+const {
+    formatMoney,
+    capitalize,
+    statCard,
+    sectionTitle,
+    footerText,
+    productosTable,
+    categoriaTable,
+    zebraTableLayout,
+    tableHeaderCell,
+    tableCell,
+    emptyRow
+} = require('../Shared/PdfDocHelpers');
 const TenantService = require('./TenantService');
 const StatsRepository = require('../../repositories/Tenant/StatsRepository');
 
@@ -15,13 +26,159 @@ function toBool(value, defaultValue) {
     return value === true || value === '1' || value === 'true';
 }
 
-function formatMoney(amount) {
-    return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    }).format(amount);
+/** Página de portada: stats globales, total por mes (rango multi-mes) y resumen por restaurante. */
+function buildCoverContent(mes, totals, activeTenantsData, ventasPorMes) {
+    const content = [
+        { text: 'Reporte Consolidado de Ventas', alignment: 'center', fontSize: 20, bold: true, color: '#4f46e5' },
+        {
+            text: `Resumen Mensual de Operaciones · ${mes}`,
+            alignment: 'center',
+            fontSize: 12,
+            color: '#64748b',
+            margin: [0, 4, 0, 24]
+        },
+        {
+            columns: [
+                statCard('Total Neto del Periodo', formatMoney(totals.totalSales), { valueColor: '#10b981' }),
+                statCard('Total Facturas / Pedidos', String(totals.totalInvoices), { valueColor: '#4f46e5' }),
+                statCard('Restaurantes Evaluados', String(activeTenantsData.length), { valueColor: '#4f46e5' })
+            ],
+            columnGap: 12,
+            margin: [0, 0, 0, 20]
+        }
+    ];
+
+    if (ventasPorMes && ventasPorMes.length > 1) {
+        const body = [
+            [
+                tableHeaderCell('Mes'),
+                tableHeaderCell('Total Facturas', 'right'),
+                tableHeaderCell('Ventas Totales', 'right')
+            ]
+        ];
+        for (const vm of ventasPorMes) {
+            body.push([
+                tableCell(capitalize(vm.nombreMes)),
+                tableCell(vm.facturas, 'right'),
+                tableCell(formatMoney(vm.total), 'right', { bold: true })
+            ]);
+        }
+        body.push([
+            { text: 'Total Neto', bold: true, fontSize: 9, fillColor: '#eef2ff' },
+            { text: String(totals.totalInvoices), bold: true, fontSize: 9, alignment: 'right', fillColor: '#eef2ff' },
+            { text: formatMoney(totals.totalSales), bold: true, fontSize: 9, alignment: 'right', fillColor: '#eef2ff' }
+        ]);
+        content.push(sectionTitle('Total por Mes', '#4f46e5'));
+        content.push({
+            table: { headerRows: 1, widths: ['*', 'auto', 'auto'], body },
+            layout: zebraTableLayout(),
+            margin: [0, 0, 0, 20]
+        });
+    }
+
+    const rBody = [
+        [
+            tableHeaderCell('Restaurante'),
+            tableHeaderCell('Slug'),
+            tableHeaderCell('Plan Contratado'),
+            tableHeaderCell('Total Facturas', 'right'),
+            tableHeaderCell('Ventas Totales (Bruto)', 'right')
+        ]
+    ];
+    if (activeTenantsData.length > 0) {
+        for (const d of activeTenantsData) {
+            rBody.push([
+                tableCell(d.tenant.nombre, 'left', { bold: true }),
+                tableCell(d.tenant.slug),
+                tableCell(d.tenant.plan_nombre || 'Sin Plan'),
+                tableCell(d.facturasMes, 'right'),
+                tableCell(formatMoney(d.totalMes), 'right', { bold: true })
+            ]);
+        }
+    } else {
+        rBody.push(emptyRow('No hay restaurantes registrados o activos.', 5));
+    }
+    content.push(sectionTitle('Resumen de Rendimiento por Restaurante', '#4f46e5'));
+    content.push({
+        table: { headerRows: 1, widths: ['*', 'auto', 'auto', 'auto', 'auto'], body: rBody },
+        layout: zebraTableLayout()
+    });
+    content.push(
+        footerText('Este reporte consolidado fue generado de forma automática por el panel de administración.')
+    );
+
+    return content;
+}
+
+/** Bloque de detalle de un tenant (siempre empieza en página nueva). */
+function buildTenantSectionContent(d, mes, mostrarTopProductos) {
+    const content = [
+        {
+            columns: [
+                {
+                    text: [
+                        { text: `${d.tenant.nombre}\n`, fontSize: 16, bold: true, color: '#10b981' },
+                        { text: `Reporte Detallado Mensual · ${mes}`, fontSize: 9, color: '#64748b' }
+                    ]
+                },
+                {
+                    text: `Slug: ${d.tenant.slug}\nPlan: ${d.tenant.plan_nombre || 'Sin Plan'}`,
+                    fontSize: 8,
+                    color: '#94a3b8',
+                    alignment: 'right'
+                }
+            ],
+            pageBreak: 'before',
+            margin: [0, 0, 0, 16]
+        }
+    ];
+
+    if (d.error) {
+        content.push({
+            text: `Error al recuperar datos: ${d.error}`,
+            color: '#991b1b',
+            fillColor: '#fef2f2',
+            fontSize: 9,
+            margin: [0, 0, 0, 16]
+        });
+        content.push(footerText(`Reporte mensual de rendimiento para ${d.tenant.nombre}.`));
+        return content;
+    }
+
+    content.push({
+        columns: [
+            statCard('Total Ingresos Brutos', formatMoney(d.totalMes), { valueColor: '#15803d' }),
+            statCard('Total Facturas/Pedidos', String(d.facturasMes), { valueColor: '#15803d' })
+        ],
+        columnGap: 12,
+        margin: [0, 0, 0, 12]
+    });
+
+    if (mostrarTopProductos) {
+        content.push(sectionTitle('Top 5 Productos más Vendidos', '#10b981'));
+        content.push(productosTable(d.topProductos));
+    }
+
+    content.push(sectionTitle('Ventas por Categoría', '#10b981'));
+    content.push(categoriaTable(d.porCategoria));
+
+    if (d.desglosePorMes && d.desglosePorMes.length > 0) {
+        content.push(sectionTitle('Productos más Vendidos por Mes', '#10b981'));
+        for (const dm of d.desglosePorMes) {
+            content.push({
+                text: capitalize(dm.nombreMes),
+                fontSize: 9,
+                bold: true,
+                color: '#4f46e5',
+                fillColor: '#eef2ff',
+                margin: [0, 8, 0, 4]
+            });
+            content.push(productosTable(dm.topProductos));
+        }
+    }
+
+    content.push(footerText(`Reporte mensual de rendimiento para ${d.tenant.nombre}.`));
+    return content;
 }
 
 class ReporteConsolidadoService {
@@ -206,34 +363,21 @@ class ReporteConsolidadoService {
             activeTenantsData[0].desglosePorMes = desglosePorMes;
         }
 
-        const templatePath = path.join(__dirname, '../../views/admin/reportes/consolidado_pdf.ejs');
-        const data = {
-            mes: mesNombre.toUpperCase(),
-            activeTenantsData,
-            ventasPorMes,
-            mostrarTopProductos: incluirTopProductos,
-            totals: {
-                totalSales: globalTotalSales,
-                totalInvoices: globalTotalInvoices
-            },
-            formatMoney
+        const mes = mesNombre.toUpperCase();
+        const totals = { totalSales: globalTotalSales, totalInvoices: globalTotalInvoices };
+
+        const docDefinition = {
+            content: [
+                ...buildCoverContent(mes, totals, activeTenantsData, ventasPorMes),
+                ...activeTenantsData.flatMap(d => buildTenantSectionContent(d, mes, incluirTopProductos))
+            ]
         };
 
-        const html = await ejs.renderFile(templatePath, data);
-
         try {
-            return await renderPdf(
-                html,
-                {
-                    format: 'A4',
-                    printBackground: true,
-                    margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' }
-                },
-                { waitUntil: 'networkidle0' }
-            );
-        } catch (puppeteerError) {
-            console.error('[CONSOLIDADO_PDF_EXPORT_ERROR]:', puppeteerError);
-            throw puppeteerError;
+            return await PdfMaker.renderPdf(docDefinition);
+        } catch (pdfError) {
+            console.error('[CONSOLIDADO_PDF_EXPORT_ERROR]:', pdfError);
+            throw pdfError;
         }
     }
 }

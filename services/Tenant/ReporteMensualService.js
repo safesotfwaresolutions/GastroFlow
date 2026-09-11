@@ -1,18 +1,15 @@
-const ejs = require('ejs');
-const path = require('node:path');
-const { renderPdf } = require('../Shared/PdfBrowser');
+const PdfMaker = require('../Shared/PdfMaker');
+const {
+    formatMoney,
+    statCard,
+    sectionTitle,
+    footerText,
+    productosTable,
+    categoriaTable
+} = require('../Shared/PdfDocHelpers');
 const MailerService = require('../Shared/MailerService');
 const StatsRepository = require('../../repositories/Tenant/StatsRepository');
 const TenantService = require('../Admin/TenantService');
-
-function formatMoney(amount) {
-    return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    }).format(amount);
-}
 
 class ReporteMensualService {
     /**
@@ -64,28 +61,45 @@ class ReporteMensualService {
     }
 
     /**
-     * Renderiza la plantilla EJS y genera el PDF mediante Puppeteer.
+     * Arma el docDefinition de pdfmake con las estadísticas del mes.
+     */
+    static buildDocDefinition(tenant, mesNombre, stats) {
+        const { totalMes, facturasMes, topProductos, porCategoria } = stats;
+        const mes = mesNombre.toUpperCase();
+
+        return {
+            content: [
+                { text: tenant.nombre, alignment: 'center', fontSize: 20, bold: true, color: '#28a745' },
+                {
+                    text: `Reporte de Ventas Mensuales - ${mes}`,
+                    alignment: 'center',
+                    fontSize: 12,
+                    color: '#666666',
+                    margin: [0, 4, 0, 20]
+                },
+                {
+                    columns: [
+                        statCard('Total Ingresos Brutos', formatMoney(totalMes), { valueColor: '#28a745' }),
+                        statCard('Total Facturas/Pedidos', String(facturasMes), { valueColor: '#28a745' })
+                    ],
+                    columnGap: 16,
+                    margin: [0, 0, 0, 10]
+                },
+                sectionTitle('Top 5 Productos más Vendidos', '#28a745'),
+                productosTable(topProductos),
+                sectionTitle('Ventas por Categoría', '#28a745'),
+                categoriaTable(porCategoria),
+                footerText('Este reporte fue generado de forma automática.')
+            ]
+        };
+    }
+
+    /**
+     * Genera el PDF del reporte mensual (pdfmake, sin Chromium).
      */
     static async generarPdfReporte(tenant, mesNombre, stats) {
-        const templatePath = path.join(__dirname, '../../views/reportes/mensual.ejs');
-        const data = {
-            tenant,
-            mes: mesNombre.toUpperCase(),
-            ...stats,
-            formatMoney
-        };
-
-        const html = await ejs.renderFile(templatePath, data);
-
-        return renderPdf(
-            html,
-            {
-                format: 'A4',
-                printBackground: true,
-                margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
-            },
-            { waitUntil: 'networkidle0' }
-        );
+        const docDefinition = this.buildDocDefinition(tenant, mesNombre, stats);
+        return PdfMaker.renderPdf(docDefinition);
     }
 
     /**

@@ -20,7 +20,7 @@ El proyecto está diseñado bajo un ecosistema moderno basado en JavaScript/Node
 | **Interactividad Frontend**| Vanilla JS + jQuery v3.6.0 | Control dinámico del DOM y peticiones AJAX. |
 | **Alertas & Modales** | SweetAlert2 v11 | Reemplazo de diálogos nativos del navegador por modales premium. |
 | **Autenticación** | JWT (jsonwebtoken) & cookies | Manejo de sesión persistente mediante cookie `auth_token` y cabeceras Bearer. |
-| **Generación de PDFs** | Puppeteer v24 (vía `services/Shared/PdfBrowser.js`) | Chromium headless de un solo uso, con carga perezosa, cierre garantizado y watchdog. Reportes mensuales y consolidados. |
+| **Generación de PDFs** | pdfmake v0.3 (vía `services/Shared/PdfMaker.js`) | Genera los PDF de reportes/planes a partir de un docDefinition, sin Chromium (los reportes son texto/tablas puros). Puppeteer se mantiene solo para `scripts/generate-og-image.js` (screenshot, no PDF). |
 | **Tiempo real** | Server-Sent Events (SSE) + `services/Shared/RealtimeEvents.js` | Bus de eventos en proceso (`orderCreated`, `mesaSolicitud`) que alimenta Cocina, Mesas, POS y Dashboard vía `GET /api/notifications/subscribe`. |
 | **Pasarela de pagos** | Wompi (cobro recurrente de la suscripción SaaS de cada tenant) | Opcional, configurable por `WOMPI_*`. Ver módulo 13. |
 | **Exportación/Importación**| ExcelJS v3.4.0 | Carga masiva de productos e insumos y descarga de reportes de ventas a Excel. |
@@ -210,5 +210,5 @@ ADMIN_NOMBRE="Administrador General"
 
 ### Despliegue en Plataformas en la Nube (ej. Railway / Render)
 * GastroFlow no es apto para entornos Serverless (como Vercel) debido al uso de conexiones SSE persistentes, crons en proceso y almacenamiento temporal en disco.
-* **Costo en la nube:** el consumo lo domina la **RAM**. Con la integración de WhatsApp ya retirada, el mayor pico restante es Chromium para PDFs (mitigado por `PdfBrowser`). Recomendado fijar `NODE_OPTIONS=--max-old-space-size` y medir el RSS real antes de dimensionar el plan.
+* **Costo en la nube:** el consumo lo domina la **RAM**. Con la integración de WhatsApp ya retirada y los PDFs migrados a pdfmake (sin Chromium), el pico de memoria por request es mucho menor. Recomendado fijar `NODE_OPTIONS=--max-old-space-size` y medir el RSS real antes de dimensionar el plan.
 * **Railway** es la plataforma recomendada, ya que permite ejecutar el servidor Express de forma continua junto a una base de datos MySQL gestionada. Se recomienda conectar un bucket S3 compatible (`R2StorageService.js`) en producción para almacenar los logotipos y archivos multimedia de los restaurantes.

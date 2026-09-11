@@ -157,7 +157,7 @@ Está pensado para uso en local (LAN), en un servidor privado o en despliegues t
 | **Contraseñas** | bcrypt |
 | **Validación** | express-validator |
 | **Archivos** | multer (subida de imágenes); exceljs (import/export Excel); `@aws-sdk/client-s3` (R2/S3 opcional para logos) |
-| **PDFs** | Puppeteer v24 vía `services/Shared/PdfBrowser.js` (Chromium de un solo uso, lazy + kill + watchdog) |
+| **PDFs** | pdfmake v0.3 vía `services/Shared/PdfMaker.js` (sin Chromium; docDefinition -> Buffer) |
 | **Tiempo real** | Server-Sent Events + `services/Shared/RealtimeEvents.js` (EventEmitter en proceso) |
 | **Pagos** | Wompi (cobro recurrente de la suscripción del tenant), opcional |
 | **Observabilidad** | Winston (logs), Sentry (opcional vía `SENTRY_DSN`) |
