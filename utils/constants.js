@@ -111,7 +111,7 @@ const PERMISSION_SECTIONS = {
     Predicción: ['prediccion.ver'],
     Perfil: ['perfil.ver', 'perfil.editar'],
     Reportes: ['reporte_mensual.test'],
-    Proveedores: ['proveedores.ver', 'proveedores.editar'],
+    Proveedores: ['proveedores.ver', 'proveedores.editar', 'proveedores.ordenes'],
     Alertas: ['alertas.configurar'],
     POS: ['pos.ver', 'pos.vender', 'pos.nombrar_cliente'],
     Clasificación: ['clasificacion.ver']

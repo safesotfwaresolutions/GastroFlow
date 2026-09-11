@@ -1,0 +1,26 @@
+<div class="modal fade" id="detalleOrdenModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-file-text me-2"></i>Orden <span id="detalleOrdenTitulo"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Insumo</th>
+                                <th class="text-end">Pedido</th>
+                                <th class="text-end">Recibido</th>
+                                <th class="text-end">Costo estimado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detalleLineasTbody"></tbody>
+                    </table>
+                </div>
+                <p id="detalleNotas" class="text-muted small mb-0"></p>
+            </div>
+        </div>
+    </div>
+</div>

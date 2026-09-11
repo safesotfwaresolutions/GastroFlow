@@ -50,6 +50,7 @@ const modificadoresRoutes = require('./tenant/modificadores');
 const perfilRoutes = require('./tenant/perfil');
 const facturacionRoutes = require('./tenant/facturacion');
 const proveedoresRoutes = require('./tenant/proveedores');
+const ordenesCompraRoutes = require('./tenant/ordenes_compra');
 const finanzasRoutes = require('./tenant/finanzas');
 const cajaRoutes = require('./tenant/caja');
 const serviciosRoutes = require('./tenant/servicios');
@@ -131,6 +132,13 @@ router.use(
     requirePlanFeature('inventario'),
     requirePermission('proveedores.ver'),
     proveedoresRoutes
+);
+router.use(
+    '/ordenes-compra',
+    requireAuthWithTenant,
+    requirePlanFeature('inventario'),
+    requirePermission('proveedores.ordenes'),
+    ordenesCompraRoutes
 );
 router.use('/recetas', requireAuthWithTenant, requirePlanFeature('recetas'), recetasRoutes);
 router.use(

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Órdenes de Compra - <%= tenant.nombre %></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+
+<body class="bg-light">
+    <%- include('../partials/navbar', { user: user, tenant: tenant }) %>
+
+    <div class="container py-4">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h2 class="fw-bold"><i class="bi bi-cart-check me-2 text-primary"></i>Órdenes de Compra</h2>
+                <p class="text-muted">Pide insumos a tus proveedores y registra lo que realmente llega al recibir.</p>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <button class="btn btn-primary" id="btnNuevaOrden" data-bs-toggle="modal" data-bs-target="#ordenCompraModal">
+                    <i class="bi bi-plus-lg me-1"></i>Nueva Orden
+                </button>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Proveedor</th>
+                                <th>Estado</th>
+                                <th class="text-end">Líneas</th>
+                                <th>Creada</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordenesTbody">
+                            <% if (ordenes.length === 0) { %>
+                                <tr><td colspan="6" class="text-center text-muted py-4">Todavía no hay órdenes de compra.</td></tr>
+                            <% } %>
+                            <% ordenes.forEach(function (o) { %>
+                                <tr>
+                                    <td>#<%= o.id %></td>
+                                    <td><%= o.proveedor_nombre %></td>
+                                    <td>
+                                        <% if (o.estado === 'pendiente') { %>
+                                            <span class="badge text-bg-warning">Pendiente</span>
+                                        <% } else if (o.estado === 'recibida') { %>
+                                            <span class="badge text-bg-success">Recibida</span>
+                                        <% } else { %>
+                                            <span class="badge text-bg-secondary">Cancelada</span>
+                                        <% } %>
+                                    </td>
+                                    <td class="text-end"><%= o.total_items %></td>
+                                    <td><%= new Date(o.created_at).toLocaleDateString('es-CO') %></td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-secondary btn-ver-orden" data-id="<%= o.id %>">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                        <% if (o.estado === 'pendiente') { %>
+                                            <button class="btn btn-sm btn-outline-success btn-recibir-orden" data-id="<%= o.id %>">
+                                                <i class="bi bi-box-arrow-in-down"></i> Recibir
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger btn-cancelar-orden" data-id="<%= o.id %>">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <%- include('_modal_form', { proveedores: proveedores }) %>
+    <%- include('_modal_recibir') %>
+    <%- include('_modal_detalle') %>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/js/modulos/ordenes_compra.js"></script>
+</body>
+
+</html>

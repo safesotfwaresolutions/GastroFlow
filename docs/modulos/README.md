@@ -19,6 +19,7 @@ Este directorio contiene la documentación lógica y operativa detallada por cad
 ## 💵 Administración y Cierre
 * **[08. Caja Diaria y Turnos](08_caja_turnos.md):** Gestión de turnos, arqueo de caja física, movimientos y auditoría de flujo de caja.
 * **[09. Finanzas y Analítica](09_finanzas_analitica.md):** Dashboard financiero (ingresos vs egresos) y predicciones de ventas con analítica interactiva.
+* **[14. Órdenes de Compra a Proveedor](14_ordenes_compra.md):** OC → recepción con cantidad editable → entrada de inventario ligada al proveedor.
 
 ## 🌐 Integraciones y SaaS Global
 * **[11. Panel de Superadmin](11_superadmin.md):** Gestión multi-tenant, planes de suscripción globales, creación y bloqueo de sucursales.

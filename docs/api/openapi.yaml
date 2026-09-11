@@ -34,7 +34,7 @@ info:
 
     > La integración de **WhatsApp** fue eliminada del sistema (2026-09) por consumo de RAM;
     > los endpoints `/whatsapp/*` ya no existen.
-  version: 1.4.0
+  version: 1.5.0
   contact:
     name: GastroFlow
 servers:
@@ -2759,6 +2759,158 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
       x-apidog-folder: Proveedores
+  /ordenes-compra:
+    get:
+      tags:
+        - Ordenes de Compra
+      summary: Listar órdenes de compra
+      description: 'Permiso: proveedores.ordenes. Feature de plan: inventario.'
+      responses:
+        '200':
+          description: Órdenes de compra del tenant, más recientes primero
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrdenCompra'
+      x-apidog-folder: Ordenes de Compra
+    post:
+      tags:
+        - Ordenes de Compra
+      summary: Crear orden de compra
+      description: 'Permiso: proveedores.ordenes. No toca inventario todavía -- eso pasa al recibirla.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [proveedor_id, items]
+              properties:
+                proveedor_id:
+                  type: integer
+                notas:
+                  type: string
+                  nullable: true
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [insumo_id, cantidad_pedida]
+                    properties:
+                      insumo_id:
+                        type: integer
+                      cantidad_pedida:
+                        type: number
+                      costo_unitario_estimado:
+                        type: number
+                        nullable: true
+      responses:
+        '201':
+          description: Orden creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  message:
+                    type: string
+        '400':
+          description: Proveedor/insumo no encontrado o datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-apidog-folder: Ordenes de Compra
+  '/ordenes-compra/{id}':
+    get:
+      tags:
+        - Ordenes de Compra
+      summary: Detalle de una orden de compra (con sus líneas)
+      description: 'Permiso: proveedores.ordenes'
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Orden de compra con items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdenCompraDetalle'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-apidog-folder: Ordenes de Compra
+  '/ordenes-compra/{id}/recibir':
+    put:
+      tags:
+        - Ordenes de Compra
+      summary: Recibir una orden de compra
+      description: >-
+        Permiso: proveedores.ordenes. La cantidad recibida es editable por línea
+        (puede diferir de lo pedido); por cada línea con cantidad > 0 se llama a
+        InventarioService.registrarEntrada (actualiza stock y costo promedio, y
+        deja el movimiento con proveedor_id y documento_referencia='OC-{id}').
+        Solo se puede recibir una orden en estado 'pendiente'.
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, cantidad_recibida]
+                    properties:
+                      id:
+                        type: integer
+                        description: id de la línea (orden_compra_items.id)
+                      cantidad_recibida:
+                        type: number
+      responses:
+        '200':
+          description: Orden recibida, inventario actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: Orden no encontrada, ya no está pendiente, o línea inválida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-apidog-folder: Ordenes de Compra
+  '/ordenes-compra/{id}/cancelar':
+    put:
+      tags:
+        - Ordenes de Compra
+      summary: Cancelar una orden de compra pendiente
+      description: 'Permiso: proveedores.ordenes. Falla si la orden ya fue recibida.'
+      parameters:
+        - $ref: '#/components/parameters/idPath'
+      responses:
+        '200':
+          description: Orden cancelada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          description: La orden no existe o ya fue recibida/cancelada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-apidog-folder: Ordenes de Compra
   /caja/abrir:
     post:
       tags:
@@ -3961,6 +4113,57 @@ components:
         activo:
           type: integer
           example: 1
+    OrdenCompra:
+      type: object
+      properties:
+        id:
+          type: integer
+        proveedor_id:
+          type: integer
+        proveedor_nombre:
+          type: string
+        estado:
+          type: string
+          enum: [pendiente, recibida, cancelada]
+        notas:
+          type: string
+          nullable: true
+        fecha_recepcion:
+          type: string
+          format: date-time
+          nullable: true
+        total_items:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+    OrdenCompraDetalle:
+      allOf:
+        - $ref: '#/components/schemas/OrdenCompra'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  insumo_id:
+                    type: integer
+                  insumo_nombre:
+                    type: string
+                  unidad_base:
+                    type: string
+                  cantidad_pedida:
+                    type: number
+                  costo_unitario_estimado:
+                    type: number
+                    nullable: true
+                  cantidad_recibida:
+                    type: number
+                    nullable: true
+                    description: NULL hasta que la orden se recibe
     Servicio:
       type: object
       properties:

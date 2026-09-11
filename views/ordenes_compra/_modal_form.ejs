@@ -1,0 +1,56 @@
+<div class="modal fade" id="ordenCompraModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cart-plus me-2"></i>Nueva Orden de Compra</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="ordenCompraForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Proveedor</label>
+                        <select class="form-select" id="oc_proveedor_id" required>
+                            <option value="">Selecciona un proveedor...</option>
+                            <% proveedores.forEach(function (p) { %>
+                                <option value="<%= p.id %>"><%= p.nombre %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notas (opcional)</label>
+                        <textarea class="form-control" id="oc_notas" rows="2"></textarea>
+                    </div>
+
+                    <label class="form-label">Insumos a pedir</label>
+                    <div id="ocLineasContainer"></div>
+                    <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="btnAgregarLinea">
+                        <i class="bi bi-plus-lg me-1"></i>Agregar insumo
+                    </button>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Orden</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<template id="ocLineaTemplate">
+    <div class="row g-2 mb-2 align-items-center oc-linea">
+        <div class="col-md-6">
+            <select class="form-select form-select-sm oc-linea-insumo" required>
+                <option value="">Selecciona un insumo...</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <input type="number" class="form-control form-control-sm oc-linea-cantidad" placeholder="Cantidad" min="0.001" step="0.001" required>
+        </div>
+        <div class="col-md-2">
+            <input type="number" class="form-control form-control-sm oc-linea-costo" placeholder="Costo estimado" min="0" step="0.01">
+        </div>
+        <div class="col-md-1 text-end">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-quitar-linea"><i class="bi bi-trash"></i></button>
+        </div>
+    </div>
+</template>
