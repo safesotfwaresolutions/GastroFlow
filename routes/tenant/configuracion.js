@@ -4,6 +4,7 @@ const multer = require('multer');
 const ConfiguracionController = require('../../app/Http/Controllers/Tenant/ConfiguracionController');
 const BaseRequest = require('../../app/Http/Requests/BaseRequest');
 const StoreConfiguracionRequest = require('../../app/Http/Requests/Tenant/StoreConfiguracionRequest');
+const { requirePermission } = require('../../middleware/auth');
 
 // Multer configuration
 const upload = multer({
@@ -49,5 +50,8 @@ router.post(
 // Helpers
 router.get('/impresoras', ConfiguracionController.getPrinters);
 router.get('/preview', ConfiguracionController.preview);
+
+// Alertas proactivas (tarjeta aparte dentro de la misma vista de configuración)
+router.put('/alertas', requirePermission('alertas.configurar'), ConfiguracionController.saveAlertas);
 
 module.exports = router;

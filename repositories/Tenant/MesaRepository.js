@@ -61,10 +61,11 @@ class MesaRepository {
      */
     static async create(mesaData) {
         const { numero, descripcion } = mesaData;
-        const [result] = await db.query(
-            'INSERT INTO mesas (numero, descripcion, estado) VALUES (?, ?, ?)',
-            [String(numero), descripcion || null, 'libre']
-        );
+        const [result] = await db.query('INSERT INTO mesas (numero, descripcion, estado) VALUES (?, ?, ?)', [
+            String(numero),
+            descripcion || null,
+            'libre'
+        ]);
         return result;
     }
 
@@ -118,7 +119,28 @@ class MesaRepository {
         const result = await db.query('UPDATE mesas SET estado = ? WHERE id = ?', [estado, id]);
         return result;
     }
+
+    /**
+     * Mesas con un pedido abierto (no cerrado/cancelado) hace más de `horas`
+     * horas, sin facturar todavía. Usado por AlertasService.
+     * @param {number} tenantId
+     * @param {number} horas
+     * @returns {Promise<Array>}
+     */
+    static async findAbiertasHace(tenantId, horas) {
+        const [rows] = await db.query(
+            `SELECT m.id AS mesa_id, m.numero AS mesa_numero, p.id AS pedido_id, p.created_at,
+                    TIMESTAMPDIFF(HOUR, p.created_at, NOW()) AS horas_abierta
+             FROM pedidos p
+             JOIN mesas m ON m.id = p.mesa_id
+             WHERE p.tenant_id = ?
+               AND p.estado NOT IN ('cerrado', 'cancelado')
+               AND TIMESTAMPDIFF(HOUR, p.created_at, NOW()) > ?
+             ORDER BY p.created_at ASC`,
+            [tenantId, horas]
+        );
+        return rows;
+    }
 }
 
 module.exports = MesaRepository;
-

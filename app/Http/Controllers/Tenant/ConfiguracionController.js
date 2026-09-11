@@ -1,4 +1,5 @@
 const ConfiguracionService = require('../../../../services/Tenant/ConfiguracionService');
+const AlertasService = require('../../../../services/Tenant/AlertasService');
 
 class ConfiguracionController {
     // GET /configuracion
@@ -11,15 +12,45 @@ class ConfiguracionController {
                     .render('errors/internal', { error: { message: 'Contexto de tenant no disponible' } });
             }
             await ConfiguracionService.initializeIfNeeded(tenantId);
-            const config = await ConfiguracionService.getForView(tenantId);
+            const [config, alertasConfig] = await Promise.all([
+                ConfiguracionService.getForView(tenantId),
+                AlertasService.getConfig(tenantId)
+            ]);
             res.render('configuracion/index', {
                 config,
+                alertasConfig,
                 user: req.user,
                 tenant: req.tenant
             });
         } catch (error) {
             console.error('Error al obtener configuración:', error);
             res.status(500).render('errors/internal', { error: { message: 'Error al obtener configuración' } });
+        }
+    }
+
+    // PUT /configuracion/alertas
+    static async saveAlertas(req, res) {
+        try {
+            const tenantId = req.tenant?.id;
+            if (!tenantId) {
+                return res.status(403).json({ error: 'Contexto de tenant no disponible' });
+            }
+            const { alertas_activas, email_notificacion, umbral_horas_mesa, umbral_caida_ventas_pct } = req.body;
+            const result = await AlertasService.saveConfig(tenantId, {
+                alertas_activas:
+                    alertas_activas === true ||
+                    alertas_activas === 'true' ||
+                    alertas_activas === 1 ||
+                    alertas_activas === '1',
+                email_notificacion: email_notificacion?.trim() || null,
+                umbral_horas_mesa: umbral_horas_mesa !== undefined ? Number.parseInt(umbral_horas_mesa, 10) : undefined,
+                umbral_caida_ventas_pct:
+                    umbral_caida_ventas_pct !== undefined ? Number.parseInt(umbral_caida_ventas_pct, 10) : undefined
+            });
+            res.json(result);
+        } catch (error) {
+            console.error('Error al guardar configuración de alertas:', error);
+            res.status(400).json({ error: error.message || 'No se pudo guardar la configuración de alertas' });
         }
     }
 

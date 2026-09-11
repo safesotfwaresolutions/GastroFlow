@@ -4,14 +4,7 @@
  * PlanesPdfService, ReporteMensualService y ReporteConsolidadoService.
  */
 
-function formatMoney(amount) {
-    return new Intl.NumberFormat('es-CO', {
-        style: 'currency',
-        currency: 'COP',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    }).format(amount || 0);
-}
+const { formatMoney } = require('../../utils/money');
 
 function capitalize(text) {
     if (!text) {

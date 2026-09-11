@@ -4,6 +4,7 @@ const FacturacionElectronicaWorkerService = require('../services/Tenant/Facturac
 const JobWorkerService = require('../services/Shared/JobWorkerService');
 const DesktopSyncService = require('../services/Shared/DesktopSyncService');
 const SuscripcionService = require('../services/Admin/SuscripcionService');
+const AlertasService = require('../services/Tenant/AlertasService');
 
 const runBackgroundJobs = async () => {
     try {
@@ -45,6 +46,17 @@ const runBackgroundJobs = async () => {
                 await SuscripcionService.procesarCobrosDiarios();
             } catch (err) {
                 console.error('Error en cron de cobro de suscripciones:', err.message);
+            }
+        });
+
+        // Alertas proactivas (stock bajo, caída de ventas, mesas sin facturar):
+        // cada 30 min. Cada tenant tiene su propio cooldown (evita spam) y la
+        // caída de ventas solo se evalúa después de cierta hora (ver AlertasService).
+        cron.schedule('*/30 * * * *', async () => {
+            try {
+                await AlertasService.evaluarTodosLosTenants();
+            } catch (err) {
+                console.error('Error en cron de alertas proactivas:', err.message);
             }
         });
 

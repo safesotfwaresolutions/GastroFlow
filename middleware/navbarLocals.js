@@ -59,7 +59,8 @@ module.exports = function navbarLocals(req, res, next) {
                 finanzas: hp('finanzas.ver'),
                 servicios: hp('servicios.ver') && cs('servicios'),
                 pos: hp('pos.ver') && cs('ventas'),
-                clasificacion: hp('clasificacion.ver')
+                clasificacion: hp('clasificacion.ver'),
+                alertas: hp('alertas.configurar') && cs('configuracion')
             };
 
             const hasMas =

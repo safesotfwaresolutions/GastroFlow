@@ -112,6 +112,7 @@ const PERMISSION_SECTIONS = {
     Perfil: ['perfil.ver', 'perfil.editar'],
     Reportes: ['reporte_mensual.test'],
     Proveedores: ['proveedores.ver', 'proveedores.editar'],
+    Alertas: ['alertas.configurar'],
     POS: ['pos.ver', 'pos.vender', 'pos.nombrar_cliente'],
     Clasificación: ['clasificacion.ver']
 };

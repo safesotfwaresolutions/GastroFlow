@@ -169,6 +169,49 @@
                     </a>
                 </div>
             </form>
+
+            <% if (typeof nav !=='undefined' && nav.can.alertas) { %>
+                <div class="card mb-4" id="cardAlertas">
+                    <div class="card-header">
+                        <i class="bi bi-bell me-2"></i>Alertas Proactivas por Email
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small">
+                            Recibe un correo automático cuando: haya insumos en o por debajo del stock mínimo,
+                            las ventas del día bajen mucho respecto al promedio reciente, o una mesa lleve
+                            abierta demasiado tiempo sin facturar.
+                        </p>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" role="switch" id="alertasActivas"
+                                <%= alertasConfig.alertas_activas ? 'checked' : '' %>>
+                            <label class="form-check-label" for="alertasActivas">Activar alertas proactivas</label>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Correo de notificación</label>
+                                <input type="email" class="form-control" id="alertasEmail"
+                                    value="<%= alertasConfig.email_notificacion || '' %>"
+                                    placeholder="<%= tenant && tenant.email ? tenant.email : 'correo@negocio.com' %>">
+                                <small class="text-muted">Si lo dejas vacío se usa el correo del negocio.</small>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Mesa sin facturar (horas)</label>
+                                <input type="number" class="form-control" id="alertasUmbralHorasMesa" min="1" max="24"
+                                    value="<%= alertasConfig.umbral_horas_mesa %>">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Caída de ventas (%)</label>
+                                <input type="number" class="form-control" id="alertasUmbralVentas" min="1" max="100"
+                                    value="<%= alertasConfig.umbral_caida_ventas_pct %>">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="btnGuardarAlertas">
+                            <i class="bi bi-save me-1"></i>Guardar Alertas
+                        </button>
+                        <div id="alertasFeedback" class="alert mt-3 mb-0" hidden></div>
+                    </div>
+                </div>
+                <% } %>
         </div>
 
         <!-- Modal para vista previa de factura -->
@@ -196,6 +239,7 @@
         <script src="/js/vendor/qz-tray.js"></script>
         <script src="/js/modulos/configuracion.js"></script>
         <script src="/js/modulos/configuracion_qz.js"></script>
+        <script src="/js/modulos/configuracion_alertas.js"></script>
 </body>
 
 </html>
