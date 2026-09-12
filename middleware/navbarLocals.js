@@ -70,7 +70,8 @@ module.exports = function navbarLocals(req, res, next) {
                 can.analitica ||
                 can.proveedores ||
                 can.servicios ||
-                can.clasificacion;
+                can.clasificacion ||
+                can.cocina;
 
             let primaryColor = '#6366f1';
             let bgStart = '#1e3a5f';

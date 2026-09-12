@@ -10,6 +10,7 @@ Este directorio contiene la documentación lógica y operativa detallada por cad
 * **[03. Mesas y Pedidos](03_mesas_pedidos.md):** Control del salón, ciclo de vida del pedido a la mesa, facturación parcial y liberación.
 * **[04. Menú QR Público](04_menu_qr.md):** Menú digital de autoconsumo con toppings, nota por producto, seguimiento de estado de la mesa y llamada al mesero (SSE).
 * **[05. Cola de Cocina](05_cocina.md):** Interfaz para preparadores y despachadores de platos.
+* **[15. KDS por Estación](15_kds_estaciones.md):** Segunda vista de la cola de cocina, agrupada por estación (fría/caliente/bebidas o las que defina el tenant) con alerta de demora.
 * **[12. Modificadores / Toppings](12_modificadores_toppings.md):** Grupos de opciones por producto, precio adicional y descuento de inventario opt-in.
 
 ## 🍳 Inventarios, Recetas y Costos

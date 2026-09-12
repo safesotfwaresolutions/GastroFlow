@@ -1,4 +1,22 @@
 const CocinaService = require('../../../../services/Tenant/CocinaService');
+const EstacionService = require('../../../../services/Tenant/EstacionService');
+
+/** Filtrado por permisos, compartido por index/getQueue/kds. */
+function filtrarPorPermisos(items, user) {
+    if (!user || user.rol === 'admin') {
+        return items;
+    }
+    const canSeeAll = user.permisos?.includes('cocina.ver_todo');
+    const canSeeReady = user.permisos?.includes('cocina.ver_listos');
+
+    if (canSeeAll) {
+        return items;
+    }
+    if (canSeeReady) {
+        return items.filter(it => it.estado === 'listo');
+    }
+    return [];
+}
 
 class CocinaController {
     // GET /cocina
@@ -11,22 +29,7 @@ class CocinaController {
                     .render('errors/internal', { error: { message: 'Contexto de tenant no disponible' } });
             }
 
-            let items = await CocinaService.getQueue(tenantId);
-
-            // Filtrado por permisos
-            if (req.user && req.user.rol !== 'admin') {
-                const canSeeAll = req.user.permisos?.includes('cocina.ver_todo');
-                const canSeeReady = req.user.permisos?.includes('cocina.ver_listos');
-
-                if (!canSeeAll) {
-                    // Si no puede ver todo, le quitamos lo que no esté listo
-                    items = items.filter(it => it.estado === 'listo');
-                }
-                if (!canSeeReady && !canSeeAll) {
-                    // Si no puede ver listos ni todo, pues nada (aunque debería tener al menos uno si entró aquí)
-                    items = [];
-                }
-            }
+            const items = filtrarPorPermisos(await CocinaService.getQueue(tenantId), req.user);
 
             res.render('cocina/index', {
                 items: items || [],
@@ -41,6 +44,28 @@ class CocinaController {
         }
     }
 
+    // GET /cocina/kds
+    static async kds(req, res) {
+        try {
+            const tenantId = req.tenant?.id;
+            if (!tenantId) {
+                return res
+                    .status(403)
+                    .render('errors/internal', { error: { message: 'Contexto de tenant no disponible' } });
+            }
+
+            const estaciones = await EstacionService.getAll(tenantId);
+            res.render('cocina/kds', {
+                estaciones: (estaciones || []).filter(e => e.activa),
+                user: req.user,
+                tenant: req.tenant
+            });
+        } catch (error) {
+            console.error('Error al cargar el KDS:', error);
+            res.status(500).render('errors/internal', { error: { message: 'Error al cargar el KDS' } });
+        }
+    }
+
     // GET /cocina/cola
     static async getQueue(req, res) {
         try {
@@ -49,21 +74,7 @@ class CocinaController {
                 return res.status(403).json({ error: 'Contexto de tenant no disponible' });
             }
 
-            let items = await CocinaService.getQueue(tenantId);
-
-            // Filtrado por permisos
-            if (req.user && req.user.rol !== 'admin') {
-                const canSeeAll = req.user.permisos?.includes('cocina.ver_todo');
-                const canSeeReady = req.user.permisos?.includes('cocina.ver_listos');
-
-                if (!canSeeAll) {
-                    items = items.filter(it => it.estado === 'listo');
-                }
-                if (!canSeeReady && !canSeeAll) {
-                    items = [];
-                }
-            }
-
+            const items = filtrarPorPermisos(await CocinaService.getQueue(tenantId), req.user);
             res.json(items);
         } catch (error) {
             console.error('Error al obtener cola:', error);

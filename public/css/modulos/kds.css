@@ -1,0 +1,85 @@
+/* ========================================
+   kds.css — KDS por estación (columnas tipo tablero)
+   ======================================== */
+
+body {
+    background-color: #f1f5f9;
+}
+
+.kds-columnas {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    align-items: flex-start;
+}
+
+.kds-columna {
+    background: #e2e8f0;
+    border-radius: 10px;
+    flex: 0 0 300px;
+    max-height: calc(100vh - 130px);
+    display: flex;
+    flex-direction: column;
+}
+
+.kds-columna-header {
+    padding: 10px 14px;
+    font-weight: 700;
+    color: #1e293b;
+    border-bottom: 2px solid rgba(0, 0, 0, 0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 10px 10px 0 0;
+}
+
+.kds-columna-body {
+    padding: 10px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.kds-item {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border-left: 4px solid #94a3b8;
+}
+
+.kds-item.espera-normal {
+    border-left-color: #22c55e;
+}
+
+.kds-item.espera-media {
+    border-left-color: #f59e0b;
+}
+
+.kds-item.espera-alta {
+    border-left-color: #ef4444;
+}
+
+.kds-item .kds-item-producto {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.kds-item .kds-item-meta {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.kds-item .kds-item-nota {
+    font-size: 0.8rem;
+    color: #475569;
+    font-style: italic;
+}
+
+.kds-empty {
+    text-align: center;
+    color: #94a3b8;
+    padding: 20px 0;
+    font-size: 0.85rem;
+}

@@ -21,12 +21,14 @@ class CocinaRepository {
             `
             SELECT i.*, p.numero AS pedido_numero, p.mesa_id, p.origen AS pedido_origen,
                    m.numero AS mesa_numero, m.tipo AS mesa_tipo, m.descripcion AS mesa_descripcion,
-                   pr.nombre AS producto_nombre
+                   pr.nombre AS producto_nombre,
+                   c.estacion_id, e.nombre AS estacion_nombre, e.orden AS estacion_orden
             FROM pedido_items i
             JOIN pedidos p ON p.id = i.pedido_id
             JOIN mesas m ON m.id = p.mesa_id
             JOIN productos pr ON pr.id = i.producto_id
             JOIN categorias c ON pr.categoria_id = c.id
+            LEFT JOIN estaciones e ON e.id = c.estacion_id
             WHERE p.tenant_id = ?
               AND c.nombre <> 'Cerámicas'
               AND p.estado NOT IN ('cerrado', 'cancelado')

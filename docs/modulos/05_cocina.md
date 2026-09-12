@@ -27,3 +27,5 @@ graph LR
     C -->|Chef termina plato| D(Estado: LISTO)
     D -->|Mesero recoge plato| E(Estado: ENTREGADO)
 ```
+
+> Además de esta vista agrupada por mesa (`/cocina`), existe una vista agrupada por **estación** (`/cocina/kds`) sobre la misma cola. Ver [Módulo 15: KDS por Estación](15_kds_estaciones.md).

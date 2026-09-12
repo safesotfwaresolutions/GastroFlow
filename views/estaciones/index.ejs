@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estaciones de Cocina - <%= tenant.nombre %></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+
+<body class="bg-light">
+    <%- include('../partials/navbar', { user: user, tenant: tenant }) %>
+
+    <div class="container py-4">
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h2 class="fw-bold"><i class="bi bi-diagram-3 me-2 text-primary"></i>Estaciones de Cocina</h2>
+                <p class="text-muted">
+                    Define las estaciones de tu cocina (fría, caliente, bebidas, o las que uses) y asigna cada
+                    categoría de producto a la estación que la prepara. El <a href="/cocina/kds">KDS por estación</a>
+                    usa esta asignación para agrupar los pedidos.
+                </p>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong>Tus estaciones</strong>
+                <button class="btn btn-sm btn-primary" id="btnNuevaEstacion">
+                    <i class="bi bi-plus-lg me-1"></i>Nueva estación
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Orden</th>
+                            <th>Nombre</th>
+                            <th>Activa</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="estacionesTbody">
+                        <% if (estaciones.length === 0) { %>
+                            <tr><td colspan="4" class="text-center text-muted py-3">Todavía no tienes estaciones.</td></tr>
+                        <% } %>
+                        <% estaciones.forEach(function (e) { %>
+                            <tr data-id="<%= e.id %>">
+                                <td><input type="number" class="form-control form-control-sm est-orden" value="<%= e.orden %>" style="width: 80px"></td>
+                                <td><input type="text" class="form-control form-control-sm est-nombre" value="<%= e.nombre %>"></td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input est-activa" type="checkbox" <%= e.activa ? 'checked' : '' %>>
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary btn-guardar-estacion"><i class="bi bi-save"></i></button>
+                                    <button class="btn btn-sm btn-outline-danger btn-borrar-estacion"><i class="bi bi-trash"></i></button>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white">
+                <strong>Asignar categorías a una estación</strong>
+            </div>
+            <div class="card-body p-0">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Categoría</th>
+                            <th style="width: 260px">Estación</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categoriasTbody">
+                        <% if (categorias.length === 0) { %>
+                            <tr><td colspan="2" class="text-center text-muted py-3">No hay categorías de producto todavía.</td></tr>
+                        <% } %>
+                        <% categorias.forEach(function (c) { %>
+                            <tr>
+                                <td><%= c.nombre %></td>
+                                <td>
+                                    <select class="form-select form-select-sm cat-estacion" data-categoria-id="<%= c.id %>">
+                                        <option value="">Sin estación</option>
+                                        <% estaciones.forEach(function (e) { %>
+                                            <option value="<%= e.id %>" <%= c.estacion_id === e.id ? 'selected' : '' %>><%= e.nombre %></option>
+                                        <% }) %>
+                                    </select>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/js/modulos/estaciones.js"></script>
+</body>
+
+</html>
