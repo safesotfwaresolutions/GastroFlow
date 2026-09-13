@@ -1,7 +1,9 @@
 # 🖥️ Módulo 15: KDS por Estación
 
 ### 1. Descripción Funcional
-Segunda vista sobre la misma cola de cocina (módulo 5), agrupada por **estación** (ej. Fría, Caliente, Bebidas) en vez de por mesa — el formato clásico de un Kitchen Display System: una columna por estación, con las comandas pendientes de esa estación y una alerta visual cuando llevan esperando demasiado. Cada restaurante define sus propias estaciones (nombre y orden) y asigna cada categoría de producto a una de ellas desde `/estaciones`.
+Modo alternativo de la misma cola de cocina (módulo 5), agrupado por **estación** (ej. Fría, Caliente, Bebidas) en vez de por mesa — el formato clásico de un Kitchen Display System: una columna por estación, con las comandas pendientes de esa estación y una alerta visual cuando llevan esperando demasiado. Cada restaurante define sus propias estaciones (nombre y orden) y asigna cada categoría de producto a una de ellas desde `/estaciones`.
+
+Vive dentro de `/cocina`, como un toggle **"Por mesa" / "Por estación"** en la pestaña "En cocina" (no es una URL separada). La preferencia de modo se guarda en `localStorage` del navegador, por dispositivo. La ruta vieja `GET /cocina/kds` se conserva solo como redirección 301 a `/cocina`, por si quedó guardada en favoritos o en una app de escritorio en modo kiosco.
 
 ---
 
@@ -12,9 +14,10 @@ Segunda vista sobre la misma cola de cocina (módulo 5), agrupada por **estació
   * Repositorio: [EstacionRepository.js](file:///c:/laragon/www/Sistema-Restaurante-Node/repositories/Tenant/EstacionRepository.js)
   * Rutas: `/estaciones` (vista + `GET|POST|PUT|DELETE`) · `PUT /estaciones/categorias/:categoriaId` (asignar/quitar estación)
   * Permiso: `cocina.gestionar` (ya existía en el catálogo de permisos desde el módulo base, sin ninguna ruta que lo exigiera todavía).
-* **Vista KDS:** `GET /cocina/kds` en el mismo [CocinaController.js](file:///c:/laragon/www/Sistema-Restaurante-Node/app/Http/Controllers/Tenant/CocinaController.js) del módulo 5 (método `kds`) — solo renderiza la lista de estaciones activas; los datos de la cola los trae el frontend igual que la vista por mesa, vía `GET /api/cocina/cola`.
-* **Extensión de la cola:** `CocinaRepository.getQueue` ahora hace `LEFT JOIN estaciones e ON e.id = c.estacion_id` y agrega `estacion_id`/`estacion_nombre`/`estacion_orden` a cada ítem — sin tocar ninguno de los otros consumidores de esa query (siguen ignorando las columnas nuevas).
-* **Tiempo real:** reusa el mismo SSE que la vista por mesa (`/api/notifications/subscribe`, evento `orderCreated`) — no hay backend nuevo de tiempo real, solo un agrupamiento distinto del lado del cliente (`public/js/modulos/cocina_kds.js`).
+* **Vista:** `GET /cocina` (método `index` de [CocinaController.js](file:///c:/laragon/www/Sistema-Restaurante-Node/app/Http/Controllers/Tenant/CocinaController.js)) ahora también resuelve las estaciones activas del tenant y las pasa a `views/cocina/index.ejs` como data island (`#kds-estaciones-data`); los datos de la cola los trae el frontend igual que siempre, vía `GET /api/cocina/cola`.
+* **Extensión de la cola:** `CocinaRepository.getQueue` hace `LEFT JOIN estaciones e ON e.id = c.estacion_id` y agrega `estacion_id`/`estacion_nombre`/`estacion_orden` a cada ítem — sin tocar ninguno de los otros consumidores de esa query (siguen ignorando las columnas nuevas).
+* **Toggle del lado del cliente:** `public/js/modulos/cocina.js` mantiene ambos renders (`renderPorMesaEnCocina` / `renderPorEstacion`) sobre la misma respuesta de `/api/cocina/cola`, y muestra/oculta los contenedores `#listaCola` / `#listaColaEstacion` según el botón activo — sin volver a pedir datos al servidor.
+* **Tiempo real:** reusa el mismo SSE que siempre (`/api/notifications/subscribe`, evento `orderCreated`) — no hay backend nuevo de tiempo real, solo un agrupamiento distinto del lado del cliente.
 
 ---
 
@@ -31,7 +34,7 @@ Segunda vista sobre la misma cola de cocina (módulo 5), agrupada por **estació
 graph TD
     A["/estaciones: crear estaciones + asignar categorías"] --> B["categorias.estacion_id"]
     B --> C["CocinaRepository.getQueue: LEFT JOIN estaciones"]
-    C --> D["/cocina/kds: agrupa por estacion_id (o 'Sin estación')"]
+    C --> D["/cocina, modo 'Por estación': agrupa por estacion_id (o 'Sin estación')"]
     D --> E{"minutos esperando desde enviado_at"}
     E -->|"< 10 min"| F["borde verde"]
     E -->|"10-20 min"| G["borde ámbar"]
@@ -42,5 +45,5 @@ graph TD
 
 ### 5. Notas de implementación
 * Al aplicar la migración se crean 3 estaciones por defecto (Fría, Caliente, Bebidas) por cada tenant activo, para que el KDS no arranque vacío — quedan sin categorías asignadas hasta que el tenant las mapee.
-* Los umbrales de espera (10 / 20 minutos) están fijos en `public/js/modulos/cocina_kds.js` en esta primera vuelta; no son configurables por tenant todavía.
+* Los umbrales de espera (10 / 20 minutos) están fijos en `public/js/modulos/cocina.js` (constantes `UMBRAL_MEDIO_MIN`/`UMBRAL_ALTO_MIN`) en esta primera vuelta; no son configurables por tenant todavía.
 * Borrar una estación no está bloqueado aunque tenga categorías asignadas: esas categorías simplemente quedan sin estación (`ON DELETE SET NULL`), consistente con cómo se maneja `insumos.proveedor_id` al borrar un proveedor.

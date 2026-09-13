@@ -5,8 +5,8 @@ const CocinaController = require('../../app/Http/Controllers/Tenant/CocinaContro
 // GET /cocina - Cola cocina vista
 router.get('/', CocinaController.index);
 
-// GET /cocina/kds - Vista KDS por estación (reusa /cocina/cola para los datos)
-router.get('/kds', CocinaController.kds);
+// GET /cocina/kds - ruta antigua; el KDS por estación ahora vive como toggle en /cocina
+router.get('/kds', CocinaController.redirectKds);
 
 // API Cola
 router.get('/cola', CocinaController.getQueue);

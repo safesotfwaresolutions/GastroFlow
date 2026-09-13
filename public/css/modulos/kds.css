@@ -1,10 +1,8 @@
 /* ========================================
    kds.css — KDS por estación (columnas tipo tablero)
+   Se carga junto a cocina.css: el fondo de la página lo pone cocina.css,
+   este archivo solo estiliza el modo "Por estación" dentro de /cocina.
    ======================================== */
-
-body {
-    background-color: #f1f5f9;
-}
 
 .kds-columnas {
     display: flex;
@@ -82,4 +80,27 @@ body {
     color: #94a3b8;
     padding: 20px 0;
     font-size: 0.85rem;
+}
+
+/* En pantallas angostas, el tablero de columnas horizontal (pensado para tablet/
+   monitor de cocina) deja de funcionar: una columna de 300px casi no deja ver
+   el borde de la siguiente, así que el swipe no se descubre y parece que solo
+   existe una estación. Se apilan verticalmente para usar el scroll normal de
+   la página, que en un teléfono es mucho más natural que el swipe lateral. */
+@media (max-width: 768px) {
+    .kds-columnas {
+        flex-direction: column;
+        overflow-x: visible;
+    }
+
+    .kds-columna {
+        flex: 1 1 auto;
+        width: 100%;
+        max-height: none;
+    }
+
+    .kds-columna-body {
+        max-height: none;
+        overflow-y: visible;
+    }
 }

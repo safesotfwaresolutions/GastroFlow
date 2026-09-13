@@ -1,7 +1,12 @@
 /**
- * Kitchen JavaScript - Groups items by table with nested cards
- * Related to: views/cocina.ejs, routes/cocina.js
+ * Kitchen JavaScript - Groups items by table with nested cards, or by
+ * estación (KDS) según el toggle "Por mesa / Por estación".
+ * Related to: views/cocina/index.ejs, routes/tenant/cocina.js
  */
+
+const UMBRAL_MEDIO_MIN = 10;
+const UMBRAL_ALTO_MIN = 20;
+const MODO_VISTA_KEY = 'gastroflow.cocina.modoVista';
 
 function escapeHtml(str) {
     return String(str)
@@ -91,6 +96,96 @@ function cardItem(it) {
         </div>`;
 }
 
+// --- Modo "Por estación" (KDS) ---------------------------------------------
+
+function minutosEsperando(item) {
+    const desde = item.enviado_at || item.created_at;
+    if (!desde) return 0;
+    return Math.max(0, Math.round((Date.now() - new Date(desde).getTime()) / 60000));
+}
+
+function claseEspera(minutos) {
+    if (minutos >= UMBRAL_ALTO_MIN) return 'espera-alta';
+    if (minutos >= UMBRAL_MEDIO_MIN) return 'espera-media';
+    return 'espera-normal';
+}
+
+function cardItemEstacion(item) {
+    const minutos = minutosEsperando(item);
+    const mesaLabel = item.pedido_origen === 'caja' ? item.mesa_descripcion || 'Mostrador' : `Mesa ${item.mesa_numero}`;
+    const accion =
+        item.estado === 'enviado'
+            ? `<button class="btn btn-sm btn-primary w-100 mt-1" data-action="prep" data-id="${item.id}"><i class="bi bi-play"></i> Preparar</button>`
+            : item.estado === 'preparando'
+              ? `<button class="btn btn-sm btn-success w-100 mt-1" data-action="listo" data-id="${item.id}"><i class="bi bi-check2"></i> Listo</button>`
+              : '';
+
+    return `
+        <div class="kds-item ${claseEspera(minutos)}">
+            <div class="d-flex justify-content-between">
+                <span class="kds-item-producto">${escapeHtml(item.producto_nombre)}</span>
+                <span class="badge bg-dark">${item.cantidad}</span>
+            </div>
+            <div class="kds-item-meta">${escapeHtml(mesaLabel)} · Pedido #${item.pedido_numero} · esperando ${minutos} min</div>
+            ${item.nota ? `<div class="kds-item-nota"><i class="bi bi-chat-left-text"></i> ${escapeHtml(item.nota)}</div>` : ''}
+            ${accion}
+        </div>
+    `;
+}
+
+function agruparPorEstacion(items, estaciones) {
+    const grupos = new Map(estaciones.map(e => [e.id, []]));
+    const sinEstacion = [];
+
+    for (const item of items) {
+        if (item.estacion_id && grupos.has(item.estacion_id)) {
+            grupos.get(item.estacion_id).push(item);
+        } else {
+            sinEstacion.push(item);
+        }
+    }
+
+    return { grupos, sinEstacion };
+}
+
+function renderPorEstacion(itemsEnCocina, estaciones) {
+    const contenedor = document.getElementById('listaColaEstacion');
+    if (!contenedor) return;
+
+    const { grupos, sinEstacion } = agruparPorEstacion(itemsEnCocina, estaciones);
+
+    const columnasHtml = estaciones
+        .map(estacion => {
+            const itemsEstacion = grupos.get(estacion.id) || [];
+            return `
+                <div class="kds-columna">
+                    <div class="kds-columna-header">
+                        <span>${escapeHtml(estacion.nombre)}</span>
+                        <span class="badge bg-secondary">${itemsEstacion.length}</span>
+                    </div>
+                    <div class="kds-columna-body">
+                        ${itemsEstacion.length ? itemsEstacion.map(cardItemEstacion).join('') : '<div class="kds-empty">Sin pendientes</div>'}
+                    </div>
+                </div>
+            `;
+        })
+        .join('');
+
+    const columnaSinEstacion = `
+        <div class="kds-columna">
+            <div class="kds-columna-header">
+                <span>Sin estación</span>
+                <span class="badge bg-secondary">${sinEstacion.length}</span>
+            </div>
+            <div class="kds-columna-body">
+                ${sinEstacion.length ? sinEstacion.map(cardItemEstacion).join('') : '<div class="kds-empty">Sin pendientes</div>'}
+            </div>
+        </div>
+    `;
+
+    contenedor.innerHTML = columnasHtml + columnaSinEstacion;
+}
+
 /**
  * Create card for mesa (parent card containing items)
  */
@@ -132,6 +227,9 @@ function cardMesa(mesaNumero, items) {
 }
 
 $(function () {
+    const estaciones = JSON.parse(document.getElementById('kds-estaciones-data')?.textContent || '[]');
+    let itemsEnCocinaCache = [];
+    let modoVista = localStorage.getItem(MODO_VISTA_KEY) === 'estacion' ? 'estacion' : 'mesa';
 
     // Allow opening tab directly with ?tab=listos
     function activarTabDesdeQuery() {
@@ -173,20 +271,11 @@ $(function () {
     }
 
     /**
-     * Group items by mesa and render
+     * Render "En cocina" agrupado por mesa (modo clásico)
      */
-    function render(items) {
+    function renderPorMesaEnCocina(itemsEnCocina) {
         const cola = $('#listaCola').empty();
-        const listos = $('#listaListos').empty();
 
-        // Filter items by state
-        const itemsEnCocina = items.filter(it => it.estado !== 'listo');
-        const itemsListos = items.filter(it => it.estado === 'listo');
-
-        // Render summary of totals (only for "En cocina" items)
-        renderResumen(itemsEnCocina);
-
-        // Group by mesa for "En cocina" tab
         if (itemsEnCocina.length > 0) {
             const porMesaEnCocina = new Map();
             itemsEnCocina.forEach(it => {
@@ -210,6 +299,57 @@ $(function () {
         } else {
             cola.append('<div class="text-center text-muted py-4">No hay items en cocina</div>');
         }
+    }
+
+    /**
+     * Muestra el contenedor del modo activo (mesa/estación) y lo renderiza
+     * con los últimos items recibidos, sin necesidad de volver a pedir la cola.
+     */
+    function aplicarModoVista() {
+        $('#vistaCocinaToggle button[data-modo]')
+            .removeClass('active')
+            .filter(`[data-modo="${modoVista}"]`)
+            .addClass('active');
+
+        if (modoVista === 'estacion') {
+            $('#listaCola').attr('hidden', true);
+            $('#listaColaEstacion').removeAttr('hidden');
+            renderPorEstacion(itemsEnCocinaCache, estaciones);
+        } else {
+            $('#listaColaEstacion').attr('hidden', true);
+            $('#listaCola').removeAttr('hidden');
+            renderPorMesaEnCocina(itemsEnCocinaCache);
+        }
+    }
+
+    $('#vistaCocinaToggle').on('click', 'button[data-modo]', function () {
+        if (this.dataset.modo === modoVista) return;
+        modoVista = this.dataset.modo;
+        try {
+            localStorage.setItem(MODO_VISTA_KEY, modoVista);
+        } catch (error) {
+            // Storage puede fallar en modo privado; no es crítico para el toggle.
+        }
+        aplicarModoVista();
+    });
+
+    /**
+     * Group items by mesa and render
+     */
+    function render(items) {
+        const listos = $('#listaListos').empty();
+
+        // Filter items by state
+        const itemsEnCocina = items.filter(it => it.estado !== 'listo');
+        const itemsListos = items.filter(it => it.estado === 'listo');
+
+        itemsEnCocinaCache = itemsEnCocina;
+
+        // Render summary of totals (only for "En cocina" items)
+        renderResumen(itemsEnCocina);
+
+        // "En cocina" tab: agrupado por mesa o por estación, según el toggle activo
+        aplicarModoVista();
 
         // Group by mesa for "Listos" tab
         if (itemsListos.length > 0) {

@@ -20,6 +20,9 @@ function filtrarPorPermisos(items, user) {
 
 class CocinaController {
     // GET /cocina
+    // Una sola vista: agrupación por mesa (clásica) o por estación (KDS), con un
+    // toggle del lado del cliente. Ambos modos comparten la misma cola de datos,
+    // así que aquí se resuelven items + estaciones activas de una vez.
     static async index(req, res) {
         try {
             const tenantId = req.tenant?.id;
@@ -29,10 +32,14 @@ class CocinaController {
                     .render('errors/internal', { error: { message: 'Contexto de tenant no disponible' } });
             }
 
-            const items = filtrarPorPermisos(await CocinaService.getQueue(tenantId), req.user);
+            const [items, estaciones] = await Promise.all([
+                CocinaService.getQueue(tenantId),
+                EstacionService.getAll(tenantId)
+            ]);
 
             res.render('cocina/index', {
-                items: items || [],
+                items: filtrarPorPermisos(items, req.user) || [],
+                estaciones: (estaciones || []).filter(e => e.activa),
                 user: req.user,
                 tenant: req.tenant
             });
@@ -44,26 +51,10 @@ class CocinaController {
         }
     }
 
-    // GET /cocina/kds
-    static async kds(req, res) {
-        try {
-            const tenantId = req.tenant?.id;
-            if (!tenantId) {
-                return res
-                    .status(403)
-                    .render('errors/internal', { error: { message: 'Contexto de tenant no disponible' } });
-            }
-
-            const estaciones = await EstacionService.getAll(tenantId);
-            res.render('cocina/kds', {
-                estaciones: (estaciones || []).filter(e => e.activa),
-                user: req.user,
-                tenant: req.tenant
-            });
-        } catch (error) {
-            console.error('Error al cargar el KDS:', error);
-            res.status(500).render('errors/internal', { error: { message: 'Error al cargar el KDS' } });
-        }
+    // GET /cocina/kds — ruta antigua, se conserva como redirección para no
+    // romper accesos guardados (favoritos, apps de escritorio en modo kiosco).
+    static redirectKds(req, res) {
+        res.redirect(301, '/cocina');
     }
 
     // GET /cocina/cola
