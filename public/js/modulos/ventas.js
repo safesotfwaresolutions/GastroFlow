@@ -38,6 +38,7 @@ function mostrarDetalles(id) {
             const factura = data.factura || {};
             const abonos = data.abonos || [];
             const bonosRedimidos = data.bonos_redimidos || [];
+            const pagosPorProducto = data.pagos_por_producto || [];
             const fmtNum = function (n) { return (Number(n) || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
             const fmtFecha = function (f) { return f ? new Date(f).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'medium' }) : '-'; };
             $('#detallesCliente').html('<p><strong>Nombre:</strong> ' + (cliente.nombre || '-') + '</p><p><strong>Dirección:</strong> ' + (cliente.direccion || 'No especificada') + '</p><p><strong>Teléfono:</strong> ' + (cliente.telefono || 'No especificado') + '</p>');
@@ -58,39 +59,50 @@ function mostrarDetalles(id) {
             }
             $('#detallesFactura').html(facturaHtml);
 
-            // Auditoría de pagos: abonos libres (pedido_abonos) + bonos redimidos
+            // Auditoría de pagos: abonos libres (pedido_abonos) + pagos por producto
+            // (pedido_item_pagos, "Facturar por Producto") + bonos redimidos
             // (bono_movimientos) + lo que faltó al momento de facturar (la
-            // diferencia entre lo cubierto por abonos y el total por cada método).
-            // Solo se muestra si hubo al menos un movimiento -- una factura pagada
-            // de una sola vez no necesita esta sección.
-            if (abonos.length > 0 || bonosRedimidos.length > 0) {
-                const sumaAbonos = { efectivo: 0, transferencia: 0 };
+            // diferencia entre lo ya cubierto por los anteriores y el total por
+            // cada método). Solo se muestra si hubo al menos un movimiento -- una
+            // factura pagada de una sola vez no necesita esta sección.
+            if (abonos.length > 0 || bonosRedimidos.length > 0 || pagosPorProducto.length > 0) {
+                const sumaCubierta = { efectivo: 0, transferencia: 0 };
                 const filasAbono = abonos.map(function (a) {
-                    sumaAbonos[a.forma_pago] = (sumaAbonos[a.forma_pago] || 0) + Number(a.monto || 0);
+                    sumaCubierta[a.forma_pago] = (sumaCubierta[a.forma_pago] || 0) + Number(a.monto || 0);
                     const metodo = a.forma_pago === 'efectivo' ? 'Efectivo' : 'Transferencia';
                     return '<tr><td><i class="bi bi-piggy-bank me-1 text-success"></i>Abono ' + metodo + (a.usuario_nombre ? ' · ' + a.usuario_nombre : '') + '</td>' +
                         '<td class="text-muted small">' + fmtFecha(a.created_at) + '</td>' +
                         '<td class="text-end">$' + fmtNum(a.monto) + '</td></tr>';
+                });
+                const filasProducto = pagosPorProducto.map(function (p) {
+                    sumaCubierta[p.forma_pago] = (sumaCubierta[p.forma_pago] || 0) + Number(p.monto || 0);
+                    const metodo = p.forma_pago === 'efectivo' ? 'Efectivo' : 'Transferencia';
+                    return '<tr><td><i class="bi bi-cart-check me-1 text-info"></i>Pagado por producto: ' + p.producto_nombre + ' x' + fmtNum(p.cantidad) + ' (' + metodo + ')' + (p.usuario_nombre ? ' · ' + p.usuario_nombre : '') + '</td>' +
+                        '<td class="text-muted small">' + fmtFecha(p.created_at) + '</td>' +
+                        '<td class="text-end">$' + fmtNum(p.monto) + '</td></tr>';
                 });
                 const filasBono = bonosRedimidos.map(function (b) {
                     return '<tr><td><i class="bi bi-gift me-1 text-warning"></i>Bono ' + b.codigo + ' redimido' + (b.usuario_nombre ? ' · ' + b.usuario_nombre : '') + '</td>' +
                         '<td class="text-muted small">' + fmtFecha(b.created_at) + '</td>' +
                         '<td class="text-end">$' + fmtNum(b.monto) + '</td></tr>';
                 });
-                let filasAbonos = filasAbono.concat(filasBono).join('');
+                // Orden cronológico: los pagos por producto suelen pasar antes que los
+                // abonos libres, pero mezclarlos por fecha real evita adivinar.
+                let filasPagos = filasAbono.concat(filasProducto, filasBono)
+                    .join('');
 
-                const restoEfectivo = Math.max(0, montoEfectivo - sumaAbonos.efectivo);
-                const restoTransferencia = Math.max(0, montoTransferencia - sumaAbonos.transferencia);
+                const restoEfectivo = Math.max(0, montoEfectivo - sumaCubierta.efectivo);
+                const restoTransferencia = Math.max(0, montoTransferencia - sumaCubierta.transferencia);
                 if (restoEfectivo > 0) {
-                    filasAbonos += '<tr><td><i class="bi bi-cash-stack me-1 text-primary"></i>Pago restante al facturar (Efectivo)</td><td class="text-muted small">' + fmtFecha(factura.fechaISO || factura.fecha) + '</td><td class="text-end">$' + fmtNum(restoEfectivo) + '</td></tr>';
+                    filasPagos += '<tr><td><i class="bi bi-cash-stack me-1 text-primary"></i>Pago restante al facturar (Efectivo)</td><td class="text-muted small">' + fmtFecha(factura.fechaISO || factura.fecha) + '</td><td class="text-end">$' + fmtNum(restoEfectivo) + '</td></tr>';
                 }
                 if (restoTransferencia > 0) {
-                    filasAbonos += '<tr><td><i class="bi bi-bank me-1 text-primary"></i>Pago restante al facturar (Transferencia)</td><td class="text-muted small">' + fmtFecha(factura.fechaISO || factura.fecha) + '</td><td class="text-end">$' + fmtNum(restoTransferencia) + '</td></tr>';
+                    filasPagos += '<tr><td><i class="bi bi-bank me-1 text-primary"></i>Pago restante al facturar (Transferencia)</td><td class="text-muted small">' + fmtFecha(factura.fechaISO || factura.fecha) + '</td><td class="text-end">$' + fmtNum(restoTransferencia) + '</td></tr>';
                 }
 
                 $('#detallesPagos').html(
                     '<h6>Historial de pagos</h6>' +
-                    '<div class="table-responsive"><table class="table table-sm mb-0"><tbody>' + filasAbonos + '</tbody></table></div>'
+                    '<div class="table-responsive"><table class="table table-sm mb-0"><tbody>' + filasPagos + '</tbody></table></div>'
                 );
             } else {
                 $('#detallesPagos').empty();

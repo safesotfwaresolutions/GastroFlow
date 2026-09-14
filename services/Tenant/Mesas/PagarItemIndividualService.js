@@ -1,10 +1,11 @@
 const db = require('../../../config/database');
+const PedidoItemPagoRepository = require('../../../repositories/Tenant/PedidoItemPagoRepository');
 
 class PagarItemIndividualService {
     /**
      * @description Marca un item individual como pagado o parcialmente pagado.
      */
-    static async execute({ tenantId, itemId, forma_pago, cantidad, skipEvent }) {
+    static async execute({ tenantId, itemId, forma_pago, cantidad, skipEvent, usuarioId = null }) {
         if (!forma_pago || !['efectivo', 'transferencia'].includes(forma_pago)) {
             throw new Error('Forma de pago requerida y debe ser efectivo o transferencia');
         }
@@ -100,6 +101,24 @@ class PagarItemIndividualService {
             );
         } else {
             await db.query(`UPDATE pedido_items SET pagado = 1, forma_pago = ? WHERE id = ?`, [forma_pago, itemId]);
+        }
+
+        // Auditoría del pago (independiente de cómo haya quedado pedido_items
+        // arriba -- esa fila se fusiona/parte con otras del mismo producto, así
+        // que es la única forma de conservar el evento con fecha y usuario).
+        try {
+            await PedidoItemPagoRepository.create({
+                tenantId,
+                pedidoId: item.pedido_id,
+                productoId: item.producto_id,
+                cantidad: cantToPay,
+                monto: cantToPay * Number.parseFloat(item.precio_unitario),
+                formaPago: forma_pago,
+                usuarioId
+            });
+        } catch (auditErr) {
+            // eslint-disable-next-line no-console
+            console.error('Error al registrar auditoría de pago por producto (no bloqueante):', auditErr);
         }
 
         if (!skipEvent) {

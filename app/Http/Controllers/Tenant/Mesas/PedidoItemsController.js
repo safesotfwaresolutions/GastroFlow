@@ -108,7 +108,13 @@ class PedidoItemsController {
             const tenantId = req.tenant?.id;
             const { itemId } = req.params;
             const { forma_pago, cantidad } = req.body;
-            const resultado = await PagarItemIndividualService.execute({ tenantId, itemId, forma_pago, cantidad });
+            const resultado = await PagarItemIndividualService.execute({
+                tenantId,
+                itemId,
+                forma_pago,
+                cantidad,
+                usuarioId: req.user?.id || null
+            });
             res.json(resultado);
         } catch (error) {
             res.status(400).json({ error: error.message });
@@ -120,7 +126,12 @@ class PedidoItemsController {
         try {
             const tenantId = req.tenant?.id;
             const { items, forma_pago } = req.body;
-            const resultado = await PagarMultiplesItemsService.execute({ tenantId, items, forma_pago });
+            const resultado = await PagarMultiplesItemsService.execute({
+                tenantId,
+                items,
+                forma_pago,
+                usuarioId: req.user?.id || null
+            });
             res.json(resultado);
         } catch (error) {
             res.status(400).json({ error: error.message });

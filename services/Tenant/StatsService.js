@@ -63,7 +63,8 @@ class StatsService {
             totalInvoicesAllTime,
             paymentTotals,
             paymentTotalsAllTime,
-            paymentTotalsMes
+            paymentTotalsMes,
+            paymentTotalsHoy
         ] = await Promise.all([
             StatsRepository.getVentasHoy(tenantId),
             StatsRepository.getVentasMes(tenantId),
@@ -81,7 +82,8 @@ class StatsService {
             StatsRepository.getTotalInvoicesAllTime(tenantId),
             StatsRepository.getTotalsByPaymentMethod(tenantId, filters),
             StatsRepository.getTotalsByPaymentMethod(tenantId, {}),
-            StatsRepository.getTotalsByPaymentMethod(tenantId, { desde: mesInicio, hasta: mesFin })
+            StatsRepository.getTotalsByPaymentMethod(tenantId, { desde: mesInicio, hasta: mesFin }),
+            StatsRepository.getTotalsByPaymentMethod(tenantId, { desde: fechaHoyColombia, hasta: fechaHoyColombia })
         ]);
 
         let insumosBajoStock = 0;
@@ -97,6 +99,11 @@ class StatsService {
         const stats = {
             ventasHoyTotal: ventasHoy.total,
             ventasHoyCantidad: ventasHoy.cantidad,
+            // ventasHoyTotal es SUM(facturas.total) bruto (incluye servicios externos,
+            // ej. domicilio de un tercero, que nunca fue ingreso propio -- se compensa
+            // con una salida de caja). ventaNetaHoy es la cifra correcta para el card
+            // "Ventas de hoy" del dashboard, igual que ya se hacía para ventaNetaMes.
+            ventaNetaHoy: ventasHoy.total - paymentTotalsHoy.serviciosExternos,
             ventasMesTotal: ventasMes.total,
             ventasMesCantidad: ventasMes.cantidad,
             totalSales,

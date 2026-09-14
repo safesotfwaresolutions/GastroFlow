@@ -8,7 +8,7 @@ class PagarMultiplesItemsService {
      * @param {Array<{itemId: number|string, cantidad: number}>} param0.items - Lista de ítems con su ID y cantidad a pagar.
      * @param {string} param0.forma_pago - Forma de pago ('efectivo' o 'transferencia').
      */
-    static async execute({ tenantId, items, forma_pago }) {
+    static async execute({ tenantId, items, forma_pago, usuarioId = null }) {
         if (!forma_pago || !['efectivo', 'transferencia'].includes(forma_pago)) {
             throw new Error('Forma de pago requerida y debe ser efectivo o transferencia');
         }
@@ -30,7 +30,8 @@ class PagarMultiplesItemsService {
                 itemId,
                 forma_pago,
                 cantidad: Number(cantidad),
-                skipEvent: true
+                skipEvent: true,
+                usuarioId
             });
             resultados.push({ itemId, result });
         }

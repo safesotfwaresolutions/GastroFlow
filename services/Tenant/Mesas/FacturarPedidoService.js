@@ -2,6 +2,7 @@ const db = require('../../../config/database');
 const FacturaRepository = require('../../../repositories/Tenant/FacturaRepository');
 const CajaRepository = require('../../../repositories/Tenant/CajaRepository');
 const PedidoAbonoRepository = require('../../../repositories/Tenant/PedidoAbonoRepository');
+const PedidoItemPagoRepository = require('../../../repositories/Tenant/PedidoItemPagoRepository');
 const BonoRepository = require('../../../repositories/Tenant/BonoRepository');
 const BonoService = require('../BonoService');
 const InventarioService = require('../InventarioService');
@@ -120,6 +121,10 @@ class FacturarPedidoService {
 
             if (abonos.efectivo > 0 || abonos.transferencia > 0) {
                 await PedidoAbonoRepository.marcarFacturados(pedidoId, facturaId, connection);
+            }
+
+            if (mEfectivoLineas > 0 || mTransfLineas > 0) {
+                await PedidoItemPagoRepository.marcarFacturados(pedidoId, facturaId, connection);
             }
 
             if (bono && montoBono > 0) {

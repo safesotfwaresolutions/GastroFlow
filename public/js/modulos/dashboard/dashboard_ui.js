@@ -153,7 +153,7 @@ $(function () {
     actualizarBannerStockBajo(stats);
 
     // 3. Variation A: Card values
-    const ventasHoy = stats.ventasHoyTotal != null ? stats.ventasHoyTotal : 0;
+    const ventasHoy = stats.ventaNetaHoy != null ? stats.ventaNetaHoy : (stats.ventasHoyTotal || 0);
     const facturasHoy = stats.ventasHoyCantidad != null ? stats.ventasHoyCantidad : 0;
     const avgTicket = facturasHoy > 0 ? ventasHoy / facturasHoy : (stats.totalInvoices > 0 ? stats.totalSales / stats.totalInvoices : 0);
     const netMes = stats.ventaNetaMes != null ? stats.ventaNetaMes : (stats.ventasMesTotal || 0);

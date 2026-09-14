@@ -10,6 +10,7 @@ const TaxService = require('../../services/Shared/TaxService');
 const CajaRepository = require('./CajaRepository');
 const PedidoAbonoRepository = require('./PedidoAbonoRepository');
 const BonoRepository = require('./BonoRepository');
+const PedidoItemPagoRepository = require('./PedidoItemPagoRepository');
 
 class FacturaRepository {
     /**
@@ -382,6 +383,7 @@ class FacturaRepository {
         // pago cuando forma_pago es 'mixto'.
         const abonos = await PedidoAbonoRepository.findByFactura(id);
         const bonosRedimidos = await BonoRepository.findRedencionesByFactura(id, tenantId);
+        const pagosPorProducto = await PedidoItemPagoRepository.findByFactura(id, tenantId);
 
         return {
             factura: {
@@ -412,6 +414,14 @@ class FacturaRepository {
                 codigo: b.codigo,
                 usuario_nombre: b.usuario_nombre || null,
                 created_at: b.created_at
+            })),
+            pagos_por_producto: pagosPorProducto.map(p => ({
+                monto: parseFloat(p.monto || 0),
+                cantidad: parseFloat(p.cantidad || 0),
+                forma_pago: p.forma_pago,
+                producto_nombre: p.producto_nombre || 'Producto',
+                usuario_nombre: p.usuario_nombre || null,
+                created_at: p.created_at
             })),
             cliente: {
                 nombre: factura.cliente_nombre || '',
