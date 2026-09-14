@@ -40,6 +40,11 @@ router.put('/pedidos/:pedidoId/cliente', Pedido.updateCliente);
 router.delete('/pedidos/:pedidoId/limpiar', Pedido.limpiar);
 router.post('/pedidos/:pedidoId/facturar', requirePermission('mesas.facturar'), Pedido.facturar);
 
+// --- ABONOS LIBRES (pago parcial de la cuenta, no ligado a productos) ---
+router.post('/pedidos/:pedidoId/abonos', requirePermission('mesas.facturar'), Pedido.registrarAbono);
+router.get('/pedidos/:pedidoId/abonos', Pedido.listarAbonos);
+router.delete('/abonos/:abonoId', requirePermission('mesas.facturar'), Pedido.eliminarAbono);
+
 // --- ITEMS DEL PEDIDO ---
 router.post('/pedidos/:pedidoId/items', queueForSync('pedido_items.agregar'), Items.store);
 router.post('/pedidos/:pedidoId/servicios', queueForSync('pedido_items.agregar_servicio'), Items.addService);

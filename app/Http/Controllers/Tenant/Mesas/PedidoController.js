@@ -4,6 +4,7 @@ const UpdatePropinaService = require('../../../../../services/Tenant/Mesas/Updat
 const AsociarClientePedidoService = require('../../../../../services/Tenant/Mesas/AsociarClientePedidoService');
 const LimpiarPedidoService = require('../../../../../services/Tenant/Mesas/LimpiarPedidoService');
 const FacturarPedidoService = require('../../../../../services/Tenant/Mesas/FacturarPedidoService');
+const AbonoPedidoService = require('../../../../../services/Tenant/Mesas/AbonoPedidoService');
 
 class PedidoController {
     // POST /mesas/abrir
@@ -89,6 +90,50 @@ class PedidoController {
             return res.status(201).json(resultado);
         } catch (error) {
             return res.status(500).json({ error: error.message });
+        }
+    }
+
+    // POST /mesas/pedidos/:pedidoId/abonos
+    static async registrarAbono(req, res) {
+        try {
+            const tenantId = req.tenant?.id;
+            const { pedidoId } = req.params;
+            const { monto, forma_pago, nota } = req.body;
+            const resultado = await AbonoPedidoService.registrar({
+                tenantId,
+                pedidoId,
+                monto,
+                forma_pago,
+                usuarioId: req.user?.id || null,
+                nota
+            });
+            return res.status(201).json(resultado);
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
+    }
+
+    // GET /mesas/pedidos/:pedidoId/abonos
+    static async listarAbonos(req, res) {
+        try {
+            const tenantId = req.tenant?.id;
+            const { pedidoId } = req.params;
+            const resultado = await AbonoPedidoService.listar(tenantId, pedidoId);
+            res.json(resultado);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
+
+    // DELETE /mesas/abonos/:abonoId
+    static async eliminarAbono(req, res) {
+        try {
+            const tenantId = req.tenant?.id;
+            const { abonoId } = req.params;
+            const resultado = await AbonoPedidoService.eliminar({ tenantId, abonoId });
+            res.json(resultado);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
         }
     }
 }

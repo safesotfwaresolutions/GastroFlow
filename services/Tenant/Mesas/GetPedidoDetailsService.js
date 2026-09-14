@@ -1,4 +1,5 @@
 const db = require('../../../config/database');
+const PedidoAbonoRepository = require('../../../repositories/Tenant/PedidoAbonoRepository');
 
 class GetPedidoDetailsService {
     /**
@@ -43,7 +44,9 @@ class GetPedidoDetailsService {
             });
         }
 
-        return { pedido, items };
+        const abonos = await PedidoAbonoRepository.findByPedido(pedidoId, tenantId);
+
+        return { pedido, items, abonos };
     }
 }
 

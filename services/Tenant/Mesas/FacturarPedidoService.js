@@ -1,6 +1,7 @@
 const db = require('../../../config/database');
 const FacturaRepository = require('../../../repositories/Tenant/FacturaRepository');
 const CajaRepository = require('../../../repositories/Tenant/CajaRepository');
+const PedidoAbonoRepository = require('../../../repositories/Tenant/PedidoAbonoRepository');
 const InventarioService = require('../InventarioService');
 const TaxService = require('../../Shared/TaxService');
 
@@ -43,6 +44,7 @@ class FacturarPedidoService {
                 total,
                 montoEfectivo: mEfectivoLineas,
                 montoTransferencia: mTransfLineas,
+                montoPendiente,
                 subtotalFactura,
                 impuestosFactura,
                 lineasFactura,
@@ -52,7 +54,6 @@ class FacturarPedidoService {
                 descuentosMap,
                 tasas,
                 defaultTasa,
-                forma_pago,
                 serviciosExternosIds
             );
 
@@ -61,11 +62,18 @@ class FacturarPedidoService {
                 Number.parseFloat(propinaBody !== null && propinaBody !== undefined ? propinaBody : pedido.propina) || 0
             );
 
+            // Abonos libres (no ligados a productos) ya recibidos mientras la
+            // mesa estaba abierta: se suman a lo que ya viene por ítem pagado y
+            // reducen lo que falta por cobrar con la forma de pago del cierre.
+            const abonos = await PedidoAbonoRepository.sumByPedido(pedidoId, tenantId, connection);
+
             const { totalConPropina, montoEfectivo, montoTransferencia, formaPagoFinal } =
                 FacturarPedidoService._calcularTotalesYFormaPago(
                     total,
                     mEfectivoLineas,
                     mTransfLineas,
+                    montoPendiente,
+                    abonos,
                     propina,
                     forma_pago
                 );
@@ -99,6 +107,10 @@ class FacturarPedidoService {
                 ]
             );
             const facturaId = facturaInsert.insertId;
+
+            if (abonos.efectivo > 0 || abonos.transferencia > 0) {
+                await PedidoAbonoRepository.marcarFacturados(pedidoId, facturaId, connection);
+            }
 
             const detallesValuesFinal = lineasFactura.map(l => [
                 facturaId,
@@ -242,17 +254,14 @@ class FacturarPedidoService {
         return { tipo: 'porcentaje', valor: Math.max(0, Number(entrada) || 0) };
     }
 
-    static _procesarLineasFactura(
-        items,
-        descuentosMap,
-        tasas,
-        defaultTasa,
-        formaPagoBase,
-        serviciosExternosIds = new Set()
-    ) {
+    static _procesarLineasFactura(items, descuentosMap, tasas, defaultTasa, serviciosExternosIds = new Set()) {
         let total = 0;
         let montoEfectivo = 0;
         let montoTransferencia = 0;
+        // Subtotal de ítems que NO quedaron marcados como pagados por producto.
+        // Se cubre con abonos ya registrados y, lo que sobre, con la forma de
+        // pago elegida al cerrar la mesa (ver _calcularTotalesYFormaPago).
+        let montoPendiente = 0;
         let subtotalFactura = 0;
         let impuestosFactura = 0;
         // Servicios externos: se compensan SIEMPRE con una salida de caja en
@@ -285,13 +294,14 @@ class FacturarPedidoService {
                 cant > 0 && subtotal !== bruto ? Math.round((subtotal / cant) * 100) / 100 : precioUnit;
             total += subtotal;
 
-            const esPagadoEfectivo = i.pagado ? i.forma_pago === 'efectivo' : formaPagoBase === 'efectivo';
-            const esPagadoTransf = i.pagado ? i.forma_pago === 'transferencia' : formaPagoBase === 'transferencia';
-
-            if (esPagadoEfectivo) {
-                montoEfectivo += subtotal;
-            } else if (esPagadoTransf) {
-                montoTransferencia += subtotal;
+            if (i.pagado) {
+                if (i.forma_pago === 'efectivo') {
+                    montoEfectivo += subtotal;
+                } else if (i.forma_pago === 'transferencia') {
+                    montoTransferencia += subtotal;
+                }
+            } else {
+                montoPendiente += subtotal;
             }
 
             if (i.es_servicio && i.servicio_id && serviciosExternosIds.has(Number(i.servicio_id))) {
@@ -323,6 +333,7 @@ class FacturarPedidoService {
             total,
             montoEfectivo,
             montoTransferencia,
+            montoPendiente,
             subtotalFactura,
             impuestosFactura,
             lineasFactura,
@@ -345,17 +356,36 @@ class FacturarPedidoService {
         return new Set(rows.map(r => Number(r.id)));
     }
 
-    static _calcularTotalesYFormaPago(totalInicial, mEfectivoLineas, mTransfLineas, propina, formaPagoBase) {
+    static _calcularTotalesYFormaPago(
+        totalInicial,
+        mEfectivoLineas,
+        mTransfLineas,
+        montoPendiente,
+        abonos,
+        propina,
+        formaPagoBase
+    ) {
         const total = Math.round(totalInicial * 100) / 100;
         const totalConPropina = Math.round((total + propina) * 100) / 100;
 
-        let montoEfectivo = mEfectivoLineas;
-        let montoTransferencia = mTransfLineas;
+        const abonosEfectivo = abonos?.efectivo || 0;
+        const abonosTransferencia = abonos?.transferencia || 0;
+
+        let montoEfectivo = mEfectivoLineas + abonosEfectivo;
+        let montoTransferencia = mTransfLineas + abonosTransferencia;
+
+        // Lo que falta por ítems, después de restar lo ya cubierto por abonos
+        // libres, se cobra con la forma de pago elegida al cerrar la mesa
+        // (junto con la propina, que nunca se abona por adelantado).
+        const montoPendienteTrasAbonos = Math.max(
+            0,
+            Math.round((montoPendiente - abonosEfectivo - abonosTransferencia) * 100) / 100
+        );
 
         if (formaPagoBase === 'efectivo') {
-            montoEfectivo += propina;
+            montoEfectivo += montoPendienteTrasAbonos + propina;
         } else if (formaPagoBase === 'transferencia') {
-            montoTransferencia += propina;
+            montoTransferencia += montoPendienteTrasAbonos + propina;
         }
 
         montoEfectivo = Math.round(montoEfectivo * 100) / 100;

@@ -147,8 +147,7 @@ describe('FacturarPedidoService', () => {
                 [item()],
                 { 1: 10 },
                 tasas,
-                0,
-                'efectivo'
+                0
             );
             expect(total).toBe(9000);
             expect(lineasFactura[0].descuento_porcentaje).toBe(10);
@@ -160,8 +159,7 @@ describe('FacturarPedidoService', () => {
                 [item()],
                 { 1: { tipo: 'valor', valor: 3000 } },
                 tasas,
-                0,
-                'efectivo'
+                0
             );
             expect(total).toBe(7000);
             expect(lineasFactura[0].descuento_valor).toBe(3000);
@@ -174,17 +172,35 @@ describe('FacturarPedidoService', () => {
                 [item()],
                 { 1: { tipo: 'valor', valor: 999999 } },
                 tasas,
-                0,
-                'efectivo'
+                0
             );
             expect(total).toBe(0);
             expect(lineasFactura[0].descuento_valor).toBe(10000);
         });
 
         it('sin descuento deja ambas columnas en null', () => {
-            const { lineasFactura } = FacturarPedidoService._procesarLineasFactura([item()], {}, tasas, 0, 'efectivo');
+            const { lineasFactura } = FacturarPedidoService._procesarLineasFactura([item()], {}, tasas, 0);
             expect(lineasFactura[0].descuento_porcentaje).toBeNull();
             expect(lineasFactura[0].descuento_valor).toBeNull();
+        });
+
+        it('un ítem ya pagado por producto va a montoEfectivo/montoTransferencia, no a montoPendiente', () => {
+            const res = FacturarPedidoService._procesarLineasFactura(
+                [item({ pagado: 1, forma_pago: 'transferencia' })],
+                {},
+                tasas,
+                0
+            );
+            expect(res.montoTransferencia).toBe(10000);
+            expect(res.montoEfectivo).toBe(0);
+            expect(res.montoPendiente).toBe(0);
+        });
+
+        it('un ítem sin pagar va a montoPendiente (lo cubren abonos o la forma de pago del cierre)', () => {
+            const res = FacturarPedidoService._procesarLineasFactura([item()], {}, tasas, 0);
+            expect(res.montoPendiente).toBe(10000);
+            expect(res.montoEfectivo).toBe(0);
+            expect(res.montoTransferencia).toBe(0);
         });
     });
 
@@ -200,32 +216,18 @@ describe('FacturarPedidoService', () => {
             pagado: 0
         };
 
-        it('acumula el servicio externo en montoServiciosExternos (pago en efectivo)', () => {
+        it('acumula el servicio externo en montoServiciosExternos sin importar cómo se pague', () => {
             const res = FacturarPedidoService._procesarLineasFactura(
                 [producto, domicilioExterno],
                 {},
                 tasas,
                 0,
-                'efectivo',
                 new Set([99])
             );
             expect(res.montoServiciosExternos).toBe(6000);
-            // el monto sigue sumando al efectivo de la factura (se compensa aparte con la salida)
-            expect(res.montoEfectivo).toBe(36000);
-        });
-
-        it('acumula el servicio externo AUNQUE la factura se pague por transferencia', () => {
-            const res = FacturarPedidoService._procesarLineasFactura(
-                [producto, domicilioExterno],
-                {},
-                tasas,
-                0,
-                'transferencia',
-                new Set([99])
-            );
-            // al domiciliario se le paga en efectivo de la gaveta -> se compensa igual
-            expect(res.montoServiciosExternos).toBe(6000);
-            expect(res.montoEfectivo).toBe(0);
+            // al domiciliario se le paga en efectivo de la gaveta -> se compensa aparte con la salida,
+            // sin importar la forma de pago elegida al facturar (eso ya no lo decide esta función).
+            expect(res.montoPendiente).toBe(36000);
         });
 
         it('NO acumula si el servicio no es externo', () => {
@@ -234,10 +236,72 @@ describe('FacturarPedidoService', () => {
                 {},
                 tasas,
                 0,
-                'efectivo',
                 new Set() // 99 no está marcado como externo
             );
             expect(res.montoServiciosExternos).toBe(0);
+        });
+    });
+
+    describe('_calcularTotalesYFormaPago (abonos libres + pago del cierre)', () => {
+        it('sin abonos: todo lo pendiente va a la forma de pago del cierre', () => {
+            const res = FacturarPedidoService._calcularTotalesYFormaPago(
+                30000,
+                0,
+                0,
+                30000,
+                { efectivo: 0, transferencia: 0 },
+                0,
+                'efectivo'
+            );
+            expect(res.montoEfectivo).toBe(30000);
+            expect(res.montoTransferencia).toBe(0);
+            expect(res.formaPagoFinal).toBe('efectivo');
+        });
+
+        it('abono parcial en efectivo + resto en transferencia al cerrar => factura mixta', () => {
+            const res = FacturarPedidoService._calcularTotalesYFormaPago(
+                30000,
+                0,
+                0,
+                30000,
+                { efectivo: 15000, transferencia: 0 },
+                0,
+                'transferencia'
+            );
+            expect(res.montoEfectivo).toBe(15000);
+            expect(res.montoTransferencia).toBe(15000);
+            expect(res.formaPagoFinal).toBe('mixto');
+            expect(res.montoEfectivo + res.montoTransferencia).toBe(res.totalConPropina);
+        });
+
+        it('abonos cubren el total exacto: no se le suma nada a la forma de pago del cierre', () => {
+            const res = FacturarPedidoService._calcularTotalesYFormaPago(
+                30000,
+                0,
+                0,
+                30000,
+                { efectivo: 15000, transferencia: 15000 },
+                0,
+                'efectivo'
+            );
+            expect(res.montoEfectivo).toBe(15000);
+            expect(res.montoTransferencia).toBe(15000);
+            expect(res.formaPagoFinal).toBe('mixto');
+        });
+
+        it('la propina nunca se cubre con abonos, siempre va a la forma de pago del cierre', () => {
+            const res = FacturarPedidoService._calcularTotalesYFormaPago(
+                30000,
+                0,
+                0,
+                30000,
+                { efectivo: 30000, transferencia: 0 },
+                2000,
+                'transferencia'
+            );
+            expect(res.montoEfectivo).toBe(30000);
+            expect(res.montoTransferencia).toBe(2000);
+            expect(res.totalConPropina).toBe(32000);
         });
     });
 
@@ -253,6 +317,9 @@ describe('FacturarPedidoService', () => {
         mockConn.query.mockImplementation(sql => {
             if (typeof sql === 'string' && sql.includes('pedido_item_modificadores')) {
                 return Promise.resolve([[]]); // sin modificadores en este pedido de prueba
+            }
+            if (typeof sql === 'string' && sql.includes('pedido_abonos')) {
+                return Promise.resolve([[]]); // sin abonos libres registrados en este pedido de prueba
             }
             return Promise.resolve([{ insertId: 100 }]); // INSERT factura, detalle_factura, etc.
         });

@@ -51,10 +51,13 @@ window.MesasModule.renderItems = function() {
       </tr>
     `);
   });
-  const totalConPropina = totalRestante + this.propinaPedido;
-  $('#totalPedido').text(this.formatear(totalConPropina));
+  const totalAbonado = (this.abonos || []).reduce((sum, a) => sum + Number(a.monto || 0), 0);
+  const saldoPendiente = Math.max(0, totalRestante + this.propinaPedido - totalAbonado);
+  $('#totalPedido').text(this.formatear(saldoPendiente));
   $('#propinaLinea').toggleClass('d-none', this.propinaPedido <= 0);
   $('#propinaMonto').text(this.formatear(this.propinaPedido));
+  $('#abonosResumenLinea').toggleClass('d-none', totalAbonado <= 0);
+  $('#abonosResumenMonto').text(this.formatear(totalAbonado));
 };
 
 window.MesasModule.actualizarUICliente = function() {

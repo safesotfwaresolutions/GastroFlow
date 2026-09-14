@@ -34,7 +34,7 @@ info:
 
     > La integración de **WhatsApp** fue eliminada del sistema (2026-09) por consumo de RAM;
     > los endpoints `/whatsapp/*` ya no existen.
-  version: 1.5.0
+  version: 1.6.0
   contact:
     name: GastroFlow
 servers:
@@ -961,6 +961,103 @@ paths:
                   numero:
                     type: integer
                     example: 129
+      x-apidog-folder: Mesas/Pedidos
+  '/api/mesas/pedidos/{pedidoId}/abonos':
+    post:
+      tags:
+        - Mesas
+      summary: Registrar un abono libre a la cuenta
+      description: |
+        Pago parcial que NO se liga a ningún producto (ej. "pagan 15.000 en
+        efectivo y el resto por transferencia más tarde"). Se resta del saldo
+        pendiente del pedido; al facturar la mesa completa, se compone junto
+        con lo ya pagado por ítem para que `forma_pago` de la factura quede
+        `mixto` con los montos reales — evita que la caja se descuadre por
+        facturas marcadas enteras a un solo método cuando en realidad se
+        cobraron mezcladas.
+      parameters:
+        - $ref: '#/components/parameters/pedidoIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - monto
+                - forma_pago
+              properties:
+                monto:
+                  type: number
+                  example: 15000
+                forma_pago:
+                  type: string
+                  enum: [efectivo, transferencia]
+                  example: efectivo
+                nota:
+                  type: string
+                  nullable: true
+      responses:
+        '201':
+          description: Abono registrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  abono_id:
+                    type: integer
+                    example: 12
+                  saldo_pendiente:
+                    type: number
+                    example: 15000
+        '400':
+          $ref: '#/components/responses/ValidationError'
+      x-apidog-folder: Mesas/Pedidos
+    get:
+      tags:
+        - Mesas
+      summary: Listar los abonos registrados del pedido
+      parameters:
+        - $ref: '#/components/parameters/pedidoIdPath'
+      responses:
+        '200':
+          description: Abonos y saldo pendiente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  abonos:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        monto:
+                          type: number
+                        forma_pago:
+                          type: string
+                        created_at:
+                          type: string
+                  saldo_pendiente:
+                    type: number
+                  total_abonado:
+                    type: number
+      x-apidog-folder: Mesas/Pedidos
+  '/api/mesas/abonos/{abonoId}':
+    delete:
+      tags:
+        - Mesas
+      summary: Eliminar un abono (solo si el pedido sigue abierto)
+      parameters:
+        - $ref: '#/components/parameters/abonoIdPath'
+      responses:
+        '200':
+          description: Abono eliminado
+        '400':
+          $ref: '#/components/responses/ValidationError'
       x-apidog-folder: Mesas/Pedidos
   '/api/mesas/pedidos/{pedidoId}/limpiar':
     delete:
@@ -3504,6 +3601,13 @@ components:
       schema:
         type: integer
       example: 101
+    abonoIdPath:
+      name: abonoId
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 12
   requestBodies:
     ProductoBody:
       required: true

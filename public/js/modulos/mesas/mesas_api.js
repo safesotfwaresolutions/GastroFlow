@@ -31,6 +31,7 @@ window.MesasModule.cargarPedido = async function(pedidoId) {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Error al cargar pedido');
     this.items = data.items || [];
+    this.abonos = data.abonos || [];
     this.propinaPedido = Number(data.pedido?.propina) || 0;
 
     if (data.pedido?.cliente_id) {

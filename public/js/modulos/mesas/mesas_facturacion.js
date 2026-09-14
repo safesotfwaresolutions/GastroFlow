@@ -408,6 +408,7 @@ $(function () {
     mod.canvas?.hide();
     mod.pedidoActual = null;
     mod.items = [];
+    mod.abonos = [];
     mod.propinaPedido = 0;
     mod.renderItems();
 
@@ -432,8 +433,170 @@ $(function () {
         checkPendientes = true;
       }
     });
+    // Los abonos libres (no ligados a productos) ya se cobraron antes: se
+    // descuentan de lo que falta por pagar al cerrar la mesa.
+    const totalAbonado = (mod.abonos || []).reduce((sum, a) => sum + Number(a.monto || 0), 0);
+    totalPedido = Math.max(0, totalPedido - totalAbonado);
     return { totalPedido, checkPendientes };
   }
+
+  // --- Abono libre a la cuenta: pago parcial que NO se liga a ningún
+  // producto (ej. "me dieron 15.000 en efectivo, el resto lo pasan por
+  // transferencia más tarde"). Se resta del saldo pendiente y, al facturar la
+  // mesa completa, FacturarPedidoService lo compone junto con lo ya pagado
+  // por ítem para que la factura final quede correctamente 'mixto'.
+  async function abonarACuenta() {
+    if (!mod.pedidoActual?.id) {
+      Swal.fire({ icon: 'error', title: 'No hay pedido activo' });
+      return;
+    }
+
+    const { totalPedido: saldo } = calcularTotalPendienteDelPedido();
+    if (saldo <= 0) {
+      Swal.fire({ icon: 'info', title: 'No hay saldo pendiente por abonar' });
+      return;
+    }
+
+    const { value: formData } = await Swal.fire({
+      title: '<h4 class="mb-0 fw-bold text-success"><i class="bi bi-piggy-bank me-2"></i>Abonar a la cuenta</h4>',
+      html: `
+        <p class="mb-2 fs-6">Saldo pendiente: <strong class="text-primary">${mod.formatear(saldo)}</strong></p>
+        <p class="text-muted small mb-3">Registra un pago parcial recibido ahora, sin ligarlo a productos puntuales.</p>
+        <input id="abonoMontoInput" type="text" inputmode="decimal" class="swal2-input" placeholder="Monto recibido">
+        <select id="abonoFormaPagoInput" class="swal2-select">
+          <option value="efectivo">Efectivo</option>
+          <option value="transferencia">Transferencia</option>
+        </select>
+      `,
+      focusConfirm: false,
+      didOpen: popup => {
+        const inp = popup.querySelector('#abonoMontoInput');
+        if (inp) MoneyInput.attach(inp);
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Registrar abono',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#198754',
+      cancelButtonColor: '#6c757d',
+      customClass: { popup: 'rounded-4 shadow' },
+      preConfirm: () => {
+        const popup = Swal.getPopup();
+        const monto = MoneyInput.parse(popup.querySelector('#abonoMontoInput').value);
+        const forma_pago = popup.querySelector('#abonoFormaPagoInput').value;
+        if (!monto || monto <= 0) {
+          Swal.showValidationMessage('Ingrese un monto válido');
+          return false;
+        }
+        if (monto > saldo) {
+          Swal.showValidationMessage(`El abono no puede superar el saldo pendiente (${mod.formatear(saldo)})`);
+          return false;
+        }
+        return { monto, forma_pago };
+      }
+    });
+
+    if (!formData) return;
+
+    try {
+      const r = await fetch(`/api/mesas/pedidos/${mod.pedidoActual.id}/abonos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error al registrar el abono');
+
+      await mod.cargarPedido(mod.pedidoActual.id);
+
+      Swal.fire({
+        icon: 'success',
+        title: 'Abono registrado',
+        html: `<p>Saldo pendiente: <strong>${mod.formatear(d.saldo_pendiente)}</strong></p>`,
+        confirmButtonColor: '#198754',
+        customClass: { popup: 'rounded-4 shadow' }
+      });
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+    }
+  }
+
+  function filaAbono(a) {
+    return `
+      <tr>
+        <td class="text-start">${a.forma_pago === 'efectivo' ? 'Efectivo' : 'Transferencia'}</td>
+        <td class="text-end">${mod.formatear(a.monto)}</td>
+        <td class="text-center">
+          <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-abono" data-id="${a.id}" title="Eliminar abono">
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+      </tr>`;
+  }
+
+  async function eliminarAbono(abonoId) {
+    const ok = await Swal.fire({
+      title: '¿Eliminar este abono?',
+      text: 'El monto vuelve a quedar como saldo pendiente.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545'
+    });
+    if (!ok.isConfirmed) return;
+
+    try {
+      const r = await fetch(`/api/mesas/abonos/${abonoId}`, { method: 'DELETE' });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'No se pudo eliminar el abono');
+      await mod.cargarPedido(mod.pedidoActual.id);
+      Swal.close();
+      // eslint-disable-next-line no-use-before-define
+      verAbonos();
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: err.message });
+    }
+  }
+
+  async function verAbonos() {
+    if (!mod.pedidoActual?.id) return;
+    try {
+      const r = await fetch(`/api/mesas/pedidos/${mod.pedidoActual.id}/abonos`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Error al cargar los abonos');
+
+      const filas = (d.abonos || []).map(filaAbono).join('');
+
+      Swal.fire({
+        title: '<h5 class="mb-0 fw-bold"><i class="bi bi-piggy-bank me-2"></i>Abonos registrados</h5>',
+        html: `
+          <div class="table-responsive" style="max-height: 280px;">
+            <table class="table table-sm align-middle">
+              <thead><tr><th class="text-start">Método</th><th class="text-end">Monto</th><th></th></tr></thead>
+              <tbody>${filas || '<tr><td colspan="3" class="text-center text-muted py-3">Sin abonos registrados</td></tr>'}</tbody>
+            </table>
+          </div>
+          <p class="text-end fw-bold mb-0 mt-2">Saldo pendiente: ${mod.formatear(d.saldo_pendiente)}</p>
+        `,
+        showConfirmButton: true,
+        confirmButtonText: 'Cerrar',
+        confirmButtonColor: '#6c757d',
+        customClass: { popup: 'rounded-4 shadow' },
+        didOpen: popup => {
+          $(popup)
+            .find('.btn-eliminar-abono')
+            .on('click', function () {
+              eliminarAbono($(this).data('id'));
+            });
+        }
+      });
+    } catch (err) {
+      Swal.fire({ icon: 'error', title: err.message });
+    }
+  }
+
+  $('#btnAbonarPedido').on('click', abonarACuenta);
+  $('#btnVerAbonos').on('click', verAbonos);
 
   async function resolverClienteAFacturar() {
     if (mod.clienteActual.id) return mod.clienteActual.id;
@@ -637,6 +800,7 @@ $(function () {
 
         mod.pedidoActual = null;
         mod.items = [];
+        mod.abonos = [];
         mod.propinaPedido = 0;
         mod.renderItems();
 
