@@ -8,6 +8,7 @@ const db = require('../../config/database');
 const { toFechaISOUtc } = require('../../utils/dateHelpers');
 const TaxService = require('../../services/Shared/TaxService');
 const CajaRepository = require('./CajaRepository');
+const PedidoAbonoRepository = require('./PedidoAbonoRepository');
 
 class FacturaRepository {
     /**
@@ -345,6 +346,7 @@ class FacturaRepository {
             `
             SELECT f.id, f.tenant_id, f.numero, f.cliente_id, f.total, f.forma_pago, f.propina, f.evento_id,
                    f.subtotal, f.descuento, f.total_impuestos,
+                   f.monto_efectivo, f.monto_transferencia, f.efectivo_recibido,
                    DATE_FORMAT(f.fecha, '%Y-%m-%d %H:%i:%s') AS fecha,
                    c.nombre AS cliente_nombre, c.direccion, c.telefono
             FROM facturas f
@@ -373,6 +375,12 @@ class FacturaRepository {
             [id]
         );
 
+        // Abonos libres registrados mientras la mesa estuvo abierta y que
+        // quedaron ligados a esta factura al cerrarla (ver marcarFacturados en
+        // FacturarPedidoService) -- traza de auditoría de cómo se compuso el
+        // pago cuando forma_pago es 'mixto'.
+        const abonos = await PedidoAbonoRepository.findByFactura(id);
+
         return {
             factura: {
                 id: factura.id,
@@ -384,8 +392,18 @@ class FacturaRepository {
                 descuento: parseFloat(factura.descuento || 0),
                 total_impuestos: parseFloat(factura.total_impuestos || 0),
                 forma_pago: factura.forma_pago,
+                monto_efectivo: parseFloat(factura.monto_efectivo || 0),
+                monto_transferencia: parseFloat(factura.monto_transferencia || 0),
+                efectivo_recibido: factura.efectivo_recibido !== null ? parseFloat(factura.efectivo_recibido) : null,
                 propina: parseFloat(factura.propina || 0)
             },
+            abonos: abonos.map(a => ({
+                monto: parseFloat(a.monto || 0),
+                forma_pago: a.forma_pago,
+                nota: a.nota || null,
+                usuario_nombre: a.usuario_nombre || null,
+                created_at: a.created_at
+            })),
             cliente: {
                 nombre: factura.cliente_nombre || '',
                 direccion: factura.direccion || '',

@@ -344,6 +344,11 @@ body {
     color: #3257b0;
 }
 
+.pay-chip.mixto {
+    background: #fdf1e7;
+    color: #b3600a;
+}
+
 /* Action buttons */
 .btn-premium-view {
     display: inline-flex;

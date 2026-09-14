@@ -142,8 +142,10 @@ class SalesStatsRepository {
 
     static async getTotalsByPaymentMethod(tenantId, filters = {}) {
         let query = `
-            SELECT f.forma_pago, 
+            SELECT f.forma_pago,
                    COALESCE(SUM(f.total), 0) AS total,
+                   COALESCE(SUM(f.monto_efectivo), 0) AS total_monto_efectivo,
+                   COALESCE(SUM(f.monto_transferencia), 0) AS total_monto_transferencia,
                    COALESCE(SUM(t_ext.ext_sum), 0) AS total_externos
             FROM facturas f
             LEFT JOIN (
@@ -185,6 +187,18 @@ class SalesStatsRepository {
                 totals.efectivo += netSale;
             } else if (fp === 'transferencia') {
                 totals.transferencia += netSale;
+            } else if (fp === 'mixto') {
+                // 'mixto' no cae en ninguno de los dos casos de arriba (no es
+                // puramente efectivo ni transferencia), así que sin esta rama
+                // esas facturas quedaban totalmente fuera de ambos totales.
+                // monto_efectivo/monto_transferencia ya vienen desglosados por
+                // FacturarPedidoService (líneas pagadas por producto + abonos +
+                // lo cobrado al cerrar la mesa), así que se usan directo. No se
+                // les resta la porción de servicios externos como al resto
+                // (no hay forma de saber de qué lado del mixto salió ese
+                // servicio) -- caso raro (externos + pago mixto el mismo día).
+                totals.efectivo += parseFloat(row.total_monto_efectivo || 0);
+                totals.transferencia += parseFloat(row.total_monto_transferencia || 0);
             }
 
             totals.serviciosExternos += totalExternos;

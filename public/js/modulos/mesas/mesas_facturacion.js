@@ -457,43 +457,52 @@ $(function () {
       return;
     }
 
-    const { value: formData } = await Swal.fire({
-      title: '<h4 class="mb-0 fw-bold text-success"><i class="bi bi-piggy-bank me-2"></i>Abonar a la cuenta</h4>',
-      html: `
-        <p class="mb-2 fs-6">Saldo pendiente: <strong class="text-primary">${mod.formatear(saldo)}</strong></p>
-        <p class="text-muted small mb-3">Registra un pago parcial recibido ahora, sin ligarlo a productos puntuales.</p>
-        <input id="abonoMontoInput" type="text" inputmode="decimal" class="swal2-input" placeholder="Monto recibido">
-        <select id="abonoFormaPagoInput" class="swal2-select">
-          <option value="efectivo">Efectivo</option>
-          <option value="transferencia">Transferencia</option>
-        </select>
-      `,
-      focusConfirm: false,
-      didOpen: popup => {
-        const inp = popup.querySelector('#abonoMontoInput');
-        if (inp) MoneyInput.attach(inp);
-      },
-      showCancelButton: true,
-      confirmButtonText: 'Registrar abono',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#198754',
-      cancelButtonColor: '#6c757d',
-      customClass: { popup: 'rounded-4 shadow' },
-      preConfirm: () => {
-        const popup = Swal.getPopup();
-        const monto = MoneyInput.parse(popup.querySelector('#abonoMontoInput').value);
-        const forma_pago = popup.querySelector('#abonoFormaPagoInput').value;
-        if (!monto || monto <= 0) {
-          Swal.showValidationMessage('Ingrese un monto válido');
-          return false;
+    // El offcanvas de la mesa (canvasPedido) atrapa el foco (focus trap de
+    // Bootstrap) y se lo roba de vuelta al input del Swal en cuanto este lo
+    // recibe, dejando el campo imposible de escribir. runWithOffcanvasHidden
+    // lo oculta mientras el Swal está abierto y lo reabre después (mismo
+    // patrón que seleccionarProducto en mesas_ui.js y mover pedido en
+    // mesas_acciones.js).
+    const { value: formData } = await mod.runWithOffcanvasHidden(() =>
+      Swal.fire({
+        title: '<h4 class="mb-0 fw-bold text-success"><i class="bi bi-piggy-bank me-2"></i>Abonar a la cuenta</h4>',
+        html: `
+          <p class="mb-2 fs-6">Saldo pendiente: <strong class="text-primary">${mod.formatear(saldo)}</strong></p>
+          <p class="text-muted small mb-3">Registra un pago parcial recibido ahora, sin ligarlo a productos puntuales.</p>
+          <input id="abonoMontoInput" type="text" inputmode="decimal" class="swal2-input" placeholder="Monto recibido">
+          <select id="abonoFormaPagoInput" class="swal2-select">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+          </select>
+        `,
+        focusConfirm: false,
+        didOpen: popup => {
+          const inp = popup.querySelector('#abonoMontoInput');
+          if (inp) MoneyInput.attach(inp);
+          evitarPropagacionEnInputSwal();
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Registrar abono',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d',
+        customClass: { popup: 'rounded-4 shadow' },
+        preConfirm: () => {
+          const popup = Swal.getPopup();
+          const monto = MoneyInput.parse(popup.querySelector('#abonoMontoInput').value);
+          const forma_pago = popup.querySelector('#abonoFormaPagoInput').value;
+          if (!monto || monto <= 0) {
+            Swal.showValidationMessage('Ingrese un monto válido');
+            return false;
+          }
+          if (monto > saldo) {
+            Swal.showValidationMessage(`El abono no puede superar el saldo pendiente (${mod.formatear(saldo)})`);
+            return false;
+          }
+          return { monto, forma_pago };
         }
-        if (monto > saldo) {
-          Swal.showValidationMessage(`El abono no puede superar el saldo pendiente (${mod.formatear(saldo)})`);
-          return false;
-        }
-        return { monto, forma_pago };
-      }
-    });
+      })
+    );
 
     if (!formData) return;
 

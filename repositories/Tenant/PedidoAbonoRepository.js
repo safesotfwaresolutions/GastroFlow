@@ -19,12 +19,25 @@ class PedidoAbonoRepository {
 
     static async findByPedido(pedidoId, tenantId, connection) {
         const [rows] = await this._conn(connection).query(
-            `SELECT pa.*, u.nombre AS usuario_nombre
+            `SELECT pa.*, u.nombre_completo AS usuario_nombre
              FROM pedido_abonos pa
              LEFT JOIN usuarios u ON u.id = pa.usuario_id
              WHERE pa.pedido_id = ? AND pa.tenant_id = ?
              ORDER BY pa.created_at ASC`,
             [pedidoId, tenantId]
+        );
+        return rows;
+    }
+
+    /** Abonos que quedaron ligados a una factura ya emitida (auditoría del detalle de factura). */
+    static async findByFactura(facturaId) {
+        const [rows] = await db.query(
+            `SELECT pa.*, u.nombre_completo AS usuario_nombre
+             FROM pedido_abonos pa
+             LEFT JOIN usuarios u ON u.id = pa.usuario_id
+             WHERE pa.factura_id = ?
+             ORDER BY pa.created_at ASC`,
+            [facturaId]
         );
         return rows;
     }

@@ -105,6 +105,8 @@ const formatMoney = (n) => '$ ' + Math.round(n).toLocaleString('es-CO');
                                 <% const fp = (venta.forma_pago || '').toLowerCase().trim(); %>
                                 <% if (fp === 'efectivo') { %>
                                     <span class="pay-chip efectivo"><i class="bi bi-cash"></i> Efectivo</span>
+                                <% } else if (fp === 'mixto') { %>
+                                    <span class="pay-chip mixto"><i class="bi bi-piggy-bank"></i> Mixto</span>
                                 <% } else { %>
                                     <span class="pay-chip transferencia"><i class="bi bi-bank"></i> Transferencia</span>
                                 <% } %>

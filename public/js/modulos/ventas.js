@@ -36,17 +36,58 @@ function mostrarDetalles(id) {
             }
             const cliente = data.cliente || {};
             const factura = data.factura || {};
+            const abonos = data.abonos || [];
+            const fmtNum = function (n) { return (Number(n) || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+            const fmtFecha = function (f) { return f ? new Date(f).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'medium' }) : '-'; };
             $('#detallesCliente').html('<p><strong>Nombre:</strong> ' + (cliente.nombre || '-') + '</p><p><strong>Dirección:</strong> ' + (cliente.direccion || 'No especificada') + '</p><p><strong>Teléfono:</strong> ' + (cliente.telefono || 'No especificado') + '</p>');
-            let facturaHtml = '<p><strong>Factura #:</strong> ' + (factura.numero != null ? factura.numero : factura.id) + '</p><p><strong>Fecha:</strong> ' + ((factura.fechaISO || factura.fecha) ? new Date(factura.fechaISO || factura.fecha).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'medium' }) : '-') + '</p><p><strong>Forma de Pago:</strong> ' + (factura.forma_pago ? (factura.forma_pago.charAt(0).toUpperCase() + factura.forma_pago.slice(1)) : '-') + '</p>';
+            let facturaHtml = '<p><strong>Factura #:</strong> ' + (factura.numero != null ? factura.numero : factura.id) + '</p><p><strong>Fecha:</strong> ' + fmtFecha(factura.fechaISO || factura.fecha) + '</p><p><strong>Forma de Pago:</strong> ' + (factura.forma_pago ? (factura.forma_pago.charAt(0).toUpperCase() + factura.forma_pago.slice(1)) : '-');
+            const montoEfectivo = Number(factura.monto_efectivo) || 0;
+            const montoTransferencia = Number(factura.monto_transferencia) || 0;
+            if (factura.forma_pago === 'mixto') {
+                facturaHtml += ' <span class="text-muted">(Efectivo: $' + fmtNum(montoEfectivo) + ' · Transferencia: $' + fmtNum(montoTransferencia) + ')</span>';
+            }
+            facturaHtml += '</p>';
             if (factura.propina != null && Number(factura.propina) > 0) {
-                facturaHtml += '<p><strong>Propina:</strong> $' + (Number(factura.propina) || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</p>';
+                facturaHtml += '<p><strong>Propina:</strong> $' + fmtNum(factura.propina) + '</p>';
             }
             $('#detallesFactura').html(facturaHtml);
+
+            // Auditoría de pagos: abonos libres registrados mientras la mesa estaba
+            // abierta (pedido_abonos) + lo que faltó al momento de facturar (la
+            // diferencia entre lo abonado y el total por cada método). Solo se
+            // muestra si hubo al menos un abono -- una factura pagada de una sola
+            // vez no necesita esta sección.
+            if (abonos.length > 0) {
+                const sumaAbonos = { efectivo: 0, transferencia: 0 };
+                let filasAbonos = abonos.map(function (a) {
+                    sumaAbonos[a.forma_pago] = (sumaAbonos[a.forma_pago] || 0) + Number(a.monto || 0);
+                    const metodo = a.forma_pago === 'efectivo' ? 'Efectivo' : 'Transferencia';
+                    return '<tr><td><i class="bi bi-piggy-bank me-1 text-success"></i>Abono ' + metodo + (a.usuario_nombre ? ' · ' + a.usuario_nombre : '') + '</td>' +
+                        '<td class="text-muted small">' + fmtFecha(a.created_at) + '</td>' +
+                        '<td class="text-end">$' + fmtNum(a.monto) + '</td></tr>';
+                }).join('');
+
+                const restoEfectivo = Math.max(0, montoEfectivo - sumaAbonos.efectivo);
+                const restoTransferencia = Math.max(0, montoTransferencia - sumaAbonos.transferencia);
+                if (restoEfectivo > 0) {
+                    filasAbonos += '<tr><td><i class="bi bi-cash-stack me-1 text-primary"></i>Pago restante al facturar (Efectivo)</td><td class="text-muted small">' + fmtFecha(factura.fechaISO || factura.fecha) + '</td><td class="text-end">$' + fmtNum(restoEfectivo) + '</td></tr>';
+                }
+                if (restoTransferencia > 0) {
+                    filasAbonos += '<tr><td><i class="bi bi-bank me-1 text-primary"></i>Pago restante al facturar (Transferencia)</td><td class="text-muted small">' + fmtFecha(factura.fechaISO || factura.fecha) + '</td><td class="text-end">$' + fmtNum(restoTransferencia) + '</td></tr>';
+                }
+
+                $('#detallesPagos').html(
+                    '<h6>Historial de pagos</h6>' +
+                    '<div class="table-responsive"><table class="table table-sm mb-0"><tbody>' + filasAbonos + '</tbody></table></div>'
+                );
+            } else {
+                $('#detallesPagos').empty();
+            }
+
             const tbody = $('#detallesProductos');
             tbody.empty();
             let totalGeneral = 0;
             const productos = data.productos || [];
-            const fmtNum = function (n) { return (Number(n) || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
             productos.forEach(function (producto) {
                 const cantidad = Number(producto.cantidad) || 0;
                 const precio = Number(producto.precio) || 0;
