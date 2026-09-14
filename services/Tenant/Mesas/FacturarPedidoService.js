@@ -2,6 +2,8 @@ const db = require('../../../config/database');
 const FacturaRepository = require('../../../repositories/Tenant/FacturaRepository');
 const CajaRepository = require('../../../repositories/Tenant/CajaRepository');
 const PedidoAbonoRepository = require('../../../repositories/Tenant/PedidoAbonoRepository');
+const BonoRepository = require('../../../repositories/Tenant/BonoRepository');
+const BonoService = require('../BonoService');
 const InventarioService = require('../InventarioService');
 const TaxService = require('../../Shared/TaxService');
 
@@ -17,7 +19,8 @@ class FacturarPedidoService {
         descuentosMap,
         propinaBody,
         usuarioId = null,
-        efectivoRecibido = null
+        efectivoRecibido = null,
+        codigoBono = null
     }) {
         const connection = await db.getConnection();
         try {
@@ -67,7 +70,12 @@ class FacturarPedidoService {
             // reducen lo que falta por cobrar con la forma de pago del cierre.
             const abonos = await PedidoAbonoRepository.sumByPedido(pedidoId, tenantId, connection);
 
-            const { totalConPropina, montoEfectivo, montoTransferencia, formaPagoFinal } =
+            // Bono redimible (opcional): se valida y bloquea (FOR UPDATE) DENTRO de
+            // esta misma transacción -- si algo más adelante falla y se hace
+            // rollback, el saldo del bono no queda descontado.
+            const bono = await BonoService.validarParaRedimir(tenantId, codigoBono, connection);
+
+            const { totalConPropina, montoEfectivo, montoTransferencia, montoBono, formaPagoFinal } =
                 FacturarPedidoService._calcularTotalesYFormaPago(
                     total,
                     mEfectivoLineas,
@@ -75,7 +83,8 @@ class FacturarPedidoService {
                     montoPendiente,
                     abonos,
                     propina,
-                    forma_pago
+                    forma_pago,
+                    bono ? Number(bono.saldo_actual) : 0
                 );
 
             const { numeroFactura, cajaSesionId, cajaSesionUsuarioId } =
@@ -89,7 +98,7 @@ class FacturarPedidoService {
                 montoEfectivo > 0 && efectivoRecibidoNum >= totalConPropina ? efectivoRecibidoNum : null;
 
             const [facturaInsert] = await connection.query(
-                `INSERT INTO facturas (tenant_id, numero, cliente_id, total, forma_pago, monto_efectivo, monto_transferencia, efectivo_recibido, propina, fecha, caja_sesion_id, subtotal, total_impuestos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO facturas (tenant_id, numero, cliente_id, total, forma_pago, monto_efectivo, monto_transferencia, efectivo_recibido, monto_bono, propina, fecha, caja_sesion_id, subtotal, total_impuestos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     tenantId,
                     numeroFactura,
@@ -99,6 +108,7 @@ class FacturarPedidoService {
                     montoEfectivo,
                     montoTransferencia,
                     efectivoRecibidoFinal,
+                    montoBono,
                     propina,
                     fechaEmisionUtc,
                     cajaSesionId,
@@ -110,6 +120,20 @@ class FacturarPedidoService {
 
             if (abonos.efectivo > 0 || abonos.transferencia > 0) {
                 await PedidoAbonoRepository.marcarFacturados(pedidoId, facturaId, connection);
+            }
+
+            if (bono && montoBono > 0) {
+                await BonoRepository.redimir(
+                    {
+                        bonoId: bono.id,
+                        tenantId,
+                        saldoAnterior: bono.saldo_actual,
+                        monto: montoBono,
+                        facturaId,
+                        usuarioId
+                    },
+                    connection
+                );
             }
 
             const detallesValuesFinal = lineasFactura.map(l => [
@@ -363,7 +387,8 @@ class FacturarPedidoService {
         montoPendiente,
         abonos,
         propina,
-        formaPagoBase
+        formaPagoBase,
+        montoBonoDisponible = 0
     ) {
         const total = Math.round(totalInicial * 100) / 100;
         const totalConPropina = Math.round((total + propina) * 100) / 100;
@@ -375,32 +400,45 @@ class FacturarPedidoService {
         let montoTransferencia = mTransfLineas + abonosTransferencia;
 
         // Lo que falta por ítems, después de restar lo ya cubierto por abonos
-        // libres, se cobra con la forma de pago elegida al cerrar la mesa
-        // (junto con la propina, que nunca se abona por adelantado).
+        // libres, se cobra -- primero con el bono (si hay), y lo que sobre con
+        // la forma de pago elegida al cerrar la mesa (junto con la propina, que
+        // nunca se abona ni se paga con bono por adelantado).
         const montoPendienteTrasAbonos = Math.max(
             0,
             Math.round((montoPendiente - abonosEfectivo - abonosTransferencia) * 100) / 100
         );
+        const pendienteConPropina = montoPendienteTrasAbonos + propina;
+
+        const montoBono = Math.min(Math.max(0, montoBonoDisponible), pendienteConPropina);
+        const pendienteTrasBono = Math.round((pendienteConPropina - montoBono) * 100) / 100;
 
         if (formaPagoBase === 'efectivo') {
-            montoEfectivo += montoPendienteTrasAbonos + propina;
+            montoEfectivo += pendienteTrasBono;
         } else if (formaPagoBase === 'transferencia') {
-            montoTransferencia += montoPendienteTrasAbonos + propina;
+            montoTransferencia += pendienteTrasBono;
         }
 
         montoEfectivo = Math.round(montoEfectivo * 100) / 100;
         montoTransferencia = Math.round(montoTransferencia * 100) / 100;
+        const montoBonoRedondeado = Math.round(montoBono * 100) / 100;
 
-        let formaPagoFinal = formaPagoBase;
-        if (montoEfectivo > 0 && montoTransferencia > 0) {
+        const metodosUsados = [montoEfectivo > 0, montoTransferencia > 0, montoBonoRedondeado > 0].filter(
+            Boolean
+        ).length;
+        let formaPagoFinal;
+        if (metodosUsados > 1) {
             formaPagoFinal = 'mixto';
+        } else if (montoBonoRedondeado > 0) {
+            formaPagoFinal = 'bono';
         } else if (montoEfectivo > 0) {
             formaPagoFinal = 'efectivo';
         } else if (montoTransferencia > 0) {
             formaPagoFinal = 'transferencia';
+        } else {
+            formaPagoFinal = formaPagoBase;
         }
 
-        return { totalConPropina, montoEfectivo, montoTransferencia, formaPagoFinal };
+        return { totalConPropina, montoEfectivo, montoTransferencia, montoBono: montoBonoRedondeado, formaPagoFinal };
     }
 
     static async _obtenerNumeroYCajaSesion(connection, tenantId) {

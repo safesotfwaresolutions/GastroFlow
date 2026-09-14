@@ -21,6 +21,7 @@ Este directorio contiene la documentación lógica y operativa detallada por cad
 * **[08. Caja Diaria y Turnos](08_caja_turnos.md):** Gestión de turnos, arqueo de caja física, movimientos y auditoría de flujo de caja.
 * **[09. Finanzas y Analítica](09_finanzas_analitica.md):** Dashboard financiero (ingresos vs egresos) y predicciones de ventas con analítica interactiva.
 * **[14. Órdenes de Compra a Proveedor](14_ordenes_compra.md):** OC → recepción con cantidad editable → entrada de inventario ligada al proveedor.
+* **[16. Bonos Redimibles](16_bonos_redimibles.md):** Saldo prepago o regalado, identificado por código, que se redime al facturar en Mesas (se compone con efectivo/transferencia como los abonos libres).
 
 ## 🌐 Integraciones y SaaS Global
 * **[11. Panel de Superadmin](11_superadmin.md):** Gestión multi-tenant, planes de suscripción globales, creación y bloqueo de sucursales.

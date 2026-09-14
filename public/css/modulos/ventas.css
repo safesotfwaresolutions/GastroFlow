@@ -349,6 +349,11 @@ body {
     color: #b3600a;
 }
 
+.pay-chip.bono {
+    background: #fce9f3;
+    color: #b3197a;
+}
+
 /* Action buttons */
 .btn-premium-view {
     display: inline-flex;

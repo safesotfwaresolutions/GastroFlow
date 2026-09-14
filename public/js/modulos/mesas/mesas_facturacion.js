@@ -689,6 +689,35 @@ $(function () {
     $('#btnConfirmarPago').prop('disabled', true);
     $('#montoManual').val('');
     $('#infoCambio').hide();
+    $('#codigoBonoInput').val('');
+    $('#bonoValidacionInfo').text('').removeClass('text-success text-danger');
+
+    async function validarBono() {
+      const codigo = $('#codigoBonoInput').val().trim().toUpperCase();
+      $('#codigoBonoInput').val(codigo);
+      if (!codigo) {
+        $('#bonoValidacionInfo').text('').removeClass('text-success text-danger');
+        return;
+      }
+      $('#bonoValidacionInfo').text('Consultando...').removeClass('text-success text-danger');
+      try {
+        const r = await fetch(`/api/bonos/validar/${encodeURIComponent(codigo)}`);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Código de bono inválido');
+        $('#bonoValidacionInfo')
+          .text(`Bono válido · saldo disponible: ${mod.formatear(d.saldo_actual)}`)
+          .addClass('text-success').removeClass('text-danger');
+      } catch (err) {
+        $('#bonoValidacionInfo').text(err.message).addClass('text-danger').removeClass('text-success');
+      }
+    }
+    $('#btnValidarBono').off('click').on('click', validarBono);
+    $('#codigoBonoInput').off('keypress').on('keypress', function (e) {
+      if (e.which === 13) {
+        e.preventDefault();
+        validarBono();
+      }
+    });
 
     $('.payment-card').off('click').on('click', function () {
       $('.payment-card').removeClass('selected');
@@ -790,7 +819,8 @@ $(function () {
             forma_pago: formaPagoSeleccionada,
             descuentos: mod.descuentosPorItem,
             propina: mod.propinaPedido,
-            efectivo_recibido: formaPagoSeleccionada === 'efectivo' ? montoRecibido : null
+            efectivo_recibido: formaPagoSeleccionada === 'efectivo' ? montoRecibido : null,
+            codigo_bono: $('#codigoBonoInput').val().trim() || null
           })
         });
         const data = await resp.json();

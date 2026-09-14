@@ -9,6 +9,7 @@ const { toFechaISOUtc } = require('../../utils/dateHelpers');
 const TaxService = require('../../services/Shared/TaxService');
 const CajaRepository = require('./CajaRepository');
 const PedidoAbonoRepository = require('./PedidoAbonoRepository');
+const BonoRepository = require('./BonoRepository');
 
 class FacturaRepository {
     /**
@@ -346,7 +347,7 @@ class FacturaRepository {
             `
             SELECT f.id, f.tenant_id, f.numero, f.cliente_id, f.total, f.forma_pago, f.propina, f.evento_id,
                    f.subtotal, f.descuento, f.total_impuestos,
-                   f.monto_efectivo, f.monto_transferencia, f.efectivo_recibido,
+                   f.monto_efectivo, f.monto_transferencia, f.efectivo_recibido, f.monto_bono,
                    DATE_FORMAT(f.fecha, '%Y-%m-%d %H:%i:%s') AS fecha,
                    c.nombre AS cliente_nombre, c.direccion, c.telefono
             FROM facturas f
@@ -380,6 +381,7 @@ class FacturaRepository {
         // FacturarPedidoService) -- traza de auditoría de cómo se compuso el
         // pago cuando forma_pago es 'mixto'.
         const abonos = await PedidoAbonoRepository.findByFactura(id);
+        const bonosRedimidos = await BonoRepository.findRedencionesByFactura(id, tenantId);
 
         return {
             factura: {
@@ -394,6 +396,7 @@ class FacturaRepository {
                 forma_pago: factura.forma_pago,
                 monto_efectivo: parseFloat(factura.monto_efectivo || 0),
                 monto_transferencia: parseFloat(factura.monto_transferencia || 0),
+                monto_bono: parseFloat(factura.monto_bono || 0),
                 efectivo_recibido: factura.efectivo_recibido !== null ? parseFloat(factura.efectivo_recibido) : null,
                 propina: parseFloat(factura.propina || 0)
             },
@@ -403,6 +406,12 @@ class FacturaRepository {
                 nota: a.nota || null,
                 usuario_nombre: a.usuario_nombre || null,
                 created_at: a.created_at
+            })),
+            bonos_redimidos: bonosRedimidos.map(b => ({
+                monto: parseFloat(b.monto || 0),
+                codigo: b.codigo,
+                usuario_nombre: b.usuario_nombre || null,
+                created_at: b.created_at
             })),
             cliente: {
                 nombre: factura.cliente_nombre || '',

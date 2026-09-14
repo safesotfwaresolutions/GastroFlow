@@ -107,6 +107,8 @@ const formatMoney = (n) => '$ ' + Math.round(n).toLocaleString('es-CO');
                                     <span class="pay-chip efectivo"><i class="bi bi-cash"></i> Efectivo</span>
                                 <% } else if (fp === 'mixto') { %>
                                     <span class="pay-chip mixto"><i class="bi bi-piggy-bank"></i> Mixto</span>
+                                <% } else if (fp === 'bono') { %>
+                                    <span class="pay-chip bono"><i class="bi bi-gift"></i> Bono</span>
                                 <% } else { %>
                                     <span class="pay-chip transferencia"><i class="bi bi-bank"></i> Transferencia</span>
                                 <% } %>

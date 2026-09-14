@@ -37,14 +37,20 @@ function mostrarDetalles(id) {
             const cliente = data.cliente || {};
             const factura = data.factura || {};
             const abonos = data.abonos || [];
+            const bonosRedimidos = data.bonos_redimidos || [];
             const fmtNum = function (n) { return (Number(n) || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
             const fmtFecha = function (f) { return f ? new Date(f).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'medium' }) : '-'; };
             $('#detallesCliente').html('<p><strong>Nombre:</strong> ' + (cliente.nombre || '-') + '</p><p><strong>Dirección:</strong> ' + (cliente.direccion || 'No especificada') + '</p><p><strong>Teléfono:</strong> ' + (cliente.telefono || 'No especificado') + '</p>');
             let facturaHtml = '<p><strong>Factura #:</strong> ' + (factura.numero != null ? factura.numero : factura.id) + '</p><p><strong>Fecha:</strong> ' + fmtFecha(factura.fechaISO || factura.fecha) + '</p><p><strong>Forma de Pago:</strong> ' + (factura.forma_pago ? (factura.forma_pago.charAt(0).toUpperCase() + factura.forma_pago.slice(1)) : '-');
             const montoEfectivo = Number(factura.monto_efectivo) || 0;
             const montoTransferencia = Number(factura.monto_transferencia) || 0;
+            const montoBono = Number(factura.monto_bono) || 0;
             if (factura.forma_pago === 'mixto') {
-                facturaHtml += ' <span class="text-muted">(Efectivo: $' + fmtNum(montoEfectivo) + ' · Transferencia: $' + fmtNum(montoTransferencia) + ')</span>';
+                const partes = [];
+                if (montoEfectivo > 0) partes.push('Efectivo: $' + fmtNum(montoEfectivo));
+                if (montoTransferencia > 0) partes.push('Transferencia: $' + fmtNum(montoTransferencia));
+                if (montoBono > 0) partes.push('Bono: $' + fmtNum(montoBono));
+                facturaHtml += ' <span class="text-muted">(' + partes.join(' · ') + ')</span>';
             }
             facturaHtml += '</p>';
             if (factura.propina != null && Number(factura.propina) > 0) {
@@ -52,20 +58,26 @@ function mostrarDetalles(id) {
             }
             $('#detallesFactura').html(facturaHtml);
 
-            // Auditoría de pagos: abonos libres registrados mientras la mesa estaba
-            // abierta (pedido_abonos) + lo que faltó al momento de facturar (la
-            // diferencia entre lo abonado y el total por cada método). Solo se
-            // muestra si hubo al menos un abono -- una factura pagada de una sola
-            // vez no necesita esta sección.
-            if (abonos.length > 0) {
+            // Auditoría de pagos: abonos libres (pedido_abonos) + bonos redimidos
+            // (bono_movimientos) + lo que faltó al momento de facturar (la
+            // diferencia entre lo cubierto por abonos y el total por cada método).
+            // Solo se muestra si hubo al menos un movimiento -- una factura pagada
+            // de una sola vez no necesita esta sección.
+            if (abonos.length > 0 || bonosRedimidos.length > 0) {
                 const sumaAbonos = { efectivo: 0, transferencia: 0 };
-                let filasAbonos = abonos.map(function (a) {
+                const filasAbono = abonos.map(function (a) {
                     sumaAbonos[a.forma_pago] = (sumaAbonos[a.forma_pago] || 0) + Number(a.monto || 0);
                     const metodo = a.forma_pago === 'efectivo' ? 'Efectivo' : 'Transferencia';
                     return '<tr><td><i class="bi bi-piggy-bank me-1 text-success"></i>Abono ' + metodo + (a.usuario_nombre ? ' · ' + a.usuario_nombre : '') + '</td>' +
                         '<td class="text-muted small">' + fmtFecha(a.created_at) + '</td>' +
                         '<td class="text-end">$' + fmtNum(a.monto) + '</td></tr>';
-                }).join('');
+                });
+                const filasBono = bonosRedimidos.map(function (b) {
+                    return '<tr><td><i class="bi bi-gift me-1 text-warning"></i>Bono ' + b.codigo + ' redimido' + (b.usuario_nombre ? ' · ' + b.usuario_nombre : '') + '</td>' +
+                        '<td class="text-muted small">' + fmtFecha(b.created_at) + '</td>' +
+                        '<td class="text-end">$' + fmtNum(b.monto) + '</td></tr>';
+                });
+                let filasAbonos = filasAbono.concat(filasBono).join('');
 
                 const restoEfectivo = Math.max(0, montoEfectivo - sumaAbonos.efectivo);
                 const restoTransferencia = Math.max(0, montoTransferencia - sumaAbonos.transferencia);

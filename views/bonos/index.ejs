@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bonos Redimibles - <%= tenant.nombre %></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+
+<body class="bg-light">
+    <%- include('../partials/navbar', { user: user, tenant: tenant }) %>
+
+    <div class="container py-4">
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h2 class="fw-bold"><i class="bi bi-gift me-2 text-primary"></i>Bonos Redimibles</h2>
+                <p class="text-muted">
+                    Bonos prepago (el cliente los compra) o regalados (fidelización), identificados por código.
+                    Se redimen al facturar en <a href="/mesas">Mesas</a>, descontando su saldo del total a pagar.
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <button class="btn btn-primary" id="btnNuevoBono">
+                    <i class="bi bi-plus-lg me-1"></i>Emitir bono
+                </button>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body">
+                <form class="row g-2 align-items-end" method="get" action="/bonos">
+                    <div class="col-sm-4">
+                        <label class="form-label small text-muted mb-1">Código o cliente</label>
+                        <input type="text" name="q" class="form-control" value="<%= filtroQ %>" placeholder="Buscar...">
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label small text-muted mb-1">Estado</label>
+                        <select name="estado" class="form-select">
+                            <option value="" <%= filtroEstado === '' ? 'selected' : '' %>>Todos</option>
+                            <option value="activo" <%= filtroEstado === 'activo' ? 'selected' : '' %>>Activo</option>
+                            <option value="agotado" <%= filtroEstado === 'agotado' ? 'selected' : '' %>>Agotado</option>
+                            <option value="vencido" <%= filtroEstado === 'vencido' ? 'selected' : '' %>>Vencido</option>
+                            <option value="anulado" <%= filtroEstado === 'anulado' ? 'selected' : '' %>>Anulado</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-2">
+                        <button type="submit" class="btn btn-outline-secondary w-100">Filtrar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white">
+                <strong>Bonos emitidos</strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código</th>
+                                <th>Origen</th>
+                                <th>Cliente</th>
+                                <th class="text-end">Valor inicial</th>
+                                <th class="text-end">Saldo</th>
+                                <th>Estado</th>
+                                <th>Vence</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bonosTbody">
+                            <% if (bonos.length === 0) { %>
+                                <tr><td colspan="8" class="text-center text-muted py-4">Todavía no has emitido ningún bono.</td></tr>
+                            <% } %>
+                            <% bonos.forEach(function (b) { %>
+                                <tr data-id="<%= b.id %>">
+                                    <td><code><%= b.codigo %></code></td>
+                                    <td><%= b.origen === 'comprado' ? 'Comprado' : 'Regalo' %></td>
+                                    <td><%= b.cliente_nombre || '-' %></td>
+                                    <td class="text-end">$<%= Number(b.valor_inicial).toLocaleString('es-CO', { minimumFractionDigits: 2 }) %></td>
+                                    <td class="text-end fw-semibold">$<%= Number(b.saldo_actual).toLocaleString('es-CO', { minimumFractionDigits: 2 }) %></td>
+                                    <td>
+                                        <% const badgeClass = { activo: 'success', agotado: 'secondary', vencido: 'warning text-dark', anulado: 'danger' }[b.estado] || 'secondary'; %>
+                                        <span class="badge bg-<%= badgeClass %>"><%= b.estado %></span>
+                                    </td>
+                                    <td><%= b.fecha_vencimiento ? b.fecha_vencimiento : 'Sin vencimiento' %></td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-primary btn-ver-bono" title="Ver movimientos"><i class="bi bi-clock-history"></i></button>
+                                        <% if (b.estado === 'activo' || b.estado === 'vencido') { %>
+                                            <button class="btn btn-sm btn-outline-danger btn-anular-bono" title="Anular"><i class="bi bi-x-circle"></i></button>
+                                        <% } %>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="/js/core/money-input.js"></script>
+    <script src="/js/modulos/bonos.js"></script>
+</body>
+
+</html>

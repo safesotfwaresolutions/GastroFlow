@@ -303,6 +303,74 @@ describe('FacturarPedidoService', () => {
             expect(res.montoTransferencia).toBe(2000);
             expect(res.totalConPropina).toBe(32000);
         });
+
+        it('bono con saldo suficiente cubre todo lo pendiente: forma_pago final es "bono"', () => {
+            const res = FacturarPedidoService._calcularTotalesYFormaPago(
+                30000,
+                0,
+                0,
+                30000,
+                { efectivo: 0, transferencia: 0 },
+                0,
+                'efectivo',
+                50000 // saldo del bono
+            );
+            expect(res.montoBono).toBe(30000);
+            expect(res.montoEfectivo).toBe(0);
+            expect(res.montoTransferencia).toBe(0);
+            expect(res.formaPagoFinal).toBe('bono');
+        });
+
+        it('bono nunca redime más de su propio saldo: el resto va a la forma de pago del cierre', () => {
+            const res = FacturarPedidoService._calcularTotalesYFormaPago(
+                30000,
+                0,
+                0,
+                30000,
+                { efectivo: 0, transferencia: 0 },
+                0,
+                'transferencia',
+                12000 // saldo del bono, menor al pendiente
+            );
+            expect(res.montoBono).toBe(12000);
+            expect(res.montoTransferencia).toBe(18000);
+            expect(res.montoEfectivo).toBe(0);
+            expect(res.formaPagoFinal).toBe('mixto');
+            expect(res.montoBono + res.montoTransferencia).toBe(res.totalConPropina);
+        });
+
+        it('bono + abono + pago del cierre combinados: se reparte en orden y queda "mixto"', () => {
+            const res = FacturarPedidoService._calcularTotalesYFormaPago(
+                30000,
+                0,
+                0,
+                30000,
+                { efectivo: 10000, transferencia: 0 }, // abono ya cubrió 10.000
+                0,
+                'transferencia',
+                15000 // el bono cubre otros 15.000 de lo que quedó pendiente
+            );
+            expect(res.montoEfectivo).toBe(10000); // el abono, intacto
+            expect(res.montoBono).toBe(15000);
+            expect(res.montoTransferencia).toBe(5000); // el resto, con la forma de pago del cierre
+            expect(res.formaPagoFinal).toBe('mixto');
+            expect(res.montoEfectivo + res.montoBono + res.montoTransferencia).toBe(res.totalConPropina);
+        });
+
+        it('sin bono (montoBonoDisponible por defecto 0): mismo comportamiento de siempre', () => {
+            const res = FacturarPedidoService._calcularTotalesYFormaPago(
+                30000,
+                0,
+                0,
+                30000,
+                { efectivo: 0, transferencia: 0 },
+                0,
+                'efectivo'
+            );
+            expect(res.montoBono).toBe(0);
+            expect(res.montoEfectivo).toBe(30000);
+            expect(res.formaPagoFinal).toBe('efectivo');
+        });
     });
 
     it('factura correctamente y emite el evento SSE "billed"', async () => {
@@ -347,5 +415,105 @@ describe('FacturarPedidoService', () => {
                 action: 'billed'
             })
         );
+    });
+
+    describe('redención de bono al facturar', () => {
+        it('redime el bono, lo descuenta de lo pendiente y registra el movimiento', async () => {
+            const bonoRow = {
+                id: 55,
+                tenant_id: 1,
+                codigo: 'BONO-ABC123',
+                saldo_actual: 3000,
+                estado: 'activo',
+                fecha_vencimiento: null
+            };
+
+            mockConn.query
+                .mockResolvedValueOnce([[{ id: 10, estado: 'abierto', mesa_id: 2, total: 5000 }]]) // SELECT pedidos
+                .mockResolvedValueOnce([[{ id: 1, cantidad: 1, precio_unitario: 5000, pagado: 0 }]]); // SELECT items
+
+            mockConn.query.mockImplementation(sql => {
+                if (typeof sql === 'string' && sql.includes('pedido_item_modificadores')) {
+                    return Promise.resolve([[]]);
+                }
+                if (typeof sql === 'string' && sql.includes('pedido_abonos')) {
+                    return Promise.resolve([[]]);
+                }
+                if (typeof sql === 'string' && sql.includes('FROM bonos WHERE codigo')) {
+                    return Promise.resolve([[bonoRow]]);
+                }
+                if (typeof sql === 'string' && sql.startsWith('UPDATE bonos')) {
+                    return Promise.resolve([{ affectedRows: 1 }]);
+                }
+                if (typeof sql === 'string' && sql.includes('INSERT INTO bono_movimientos')) {
+                    return Promise.resolve([{ insertId: 1 }]);
+                }
+                return Promise.resolve([{ insertId: 100 }]);
+            });
+
+            const res = await FacturarPedidoService.execute({
+                tenantId: 1,
+                pedidoId: 10,
+                cliente_id: 1,
+                forma_pago: 'efectivo',
+                descuentosMap: {},
+                propinaBody: 0,
+                codigoBono: 'bono-abc123' // el service lo normaliza a mayúsculas
+            });
+
+            expect(res).toHaveProperty('factura_id');
+            expect(mockConn.commit).toHaveBeenCalled();
+
+            // El total del pedido es 5.000 y el bono solo tiene 3.000 de saldo:
+            // la factura queda INSERT con monto_bono=3000 y monto_efectivo=2000 (el resto).
+            const insertFactura = mockConn.query.mock.calls.find(
+                call => typeof call[0] === 'string' && call[0].includes('INSERT INTO facturas')
+            );
+            expect(insertFactura).toBeDefined();
+            const [, values] = insertFactura;
+            const montoEfectivoIdx = 5; // orden de columnas en el INSERT: ...forma_pago, monto_efectivo, monto_transferencia, efectivo_recibido, monto_bono...
+            const montoBonoIdx = 8;
+            expect(values[montoEfectivoIdx]).toBe(2000);
+            expect(values[montoBonoIdx]).toBe(3000);
+
+            const updateBono = mockConn.query.mock.calls.find(
+                call => typeof call[0] === 'string' && call[0].startsWith('UPDATE bonos')
+            );
+            expect(updateBono[1]).toEqual([0, 'agotado', 55, 1]); // saldo 3000 - 3000 redimido = 0, queda 'agotado'
+        });
+
+        it('rechaza facturar si el código de bono no existe (no crea la factura)', async () => {
+            mockConn.query
+                .mockResolvedValueOnce([[{ id: 10, estado: 'abierto', mesa_id: 2, total: 5000 }]])
+                .mockResolvedValueOnce([[{ id: 1, cantidad: 1, precio_unitario: 5000, pagado: 0 }]]);
+
+            mockConn.query.mockImplementation(sql => {
+                if (typeof sql === 'string' && sql.includes('pedido_abonos')) {
+                    return Promise.resolve([[]]);
+                }
+                if (typeof sql === 'string' && sql.includes('FROM bonos WHERE codigo')) {
+                    return Promise.resolve([[]]); // no existe
+                }
+                return Promise.resolve([{ insertId: 100 }]);
+            });
+
+            await expect(
+                FacturarPedidoService.execute({
+                    tenantId: 1,
+                    pedidoId: 10,
+                    cliente_id: 1,
+                    forma_pago: 'efectivo',
+                    descuentosMap: {},
+                    propinaBody: 0,
+                    codigoBono: 'BONO-NOEXISTE'
+                })
+            ).rejects.toThrow('El código de bono no existe');
+
+            expect(mockConn.rollback).toHaveBeenCalled();
+            const insertFactura = mockConn.query.mock.calls.find(
+                call => typeof call[0] === 'string' && call[0].includes('INSERT INTO facturas')
+            );
+            expect(insertFactura).toBeUndefined();
+        });
     });
 });

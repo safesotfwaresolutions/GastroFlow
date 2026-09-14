@@ -59,6 +59,8 @@ const soporteTenantRoutes = require('./tenant/soporte');
 const posRoutes = require('./tenant/pos');
 const clasificacionRoutes = require('./tenant/clasificacion');
 const syncRoutes = require('./tenant/sync');
+const bonosRoutes = require('./tenant/bonos');
+const BonosController = require('../app/Http/Controllers/Tenant/BonosController');
 const onboardingRoutes = require('./onboarding');
 const adminOnboardingRoutes = require('./admin/onboarding');
 const NotificationController = require('../app/Http/Controllers/Tenant/NotificationController');
@@ -162,6 +164,11 @@ router.use(
     costeoRoutes
 );
 router.use('/caja', requireAuthWithTenant, requirePermission('caja.ver'), cajaRoutes);
+router.use('/bonos', requireAuthWithTenant, bonosRoutes);
+// Consulta liviana de saldo por código, usada desde el checkout de Mesas/POS al
+// redimir: solo requiere estar autenticado en el tenant (no bonos.ver/gestionar),
+// igual que cualquiera que pueda facturar ya puede registrar un abono.
+router.get('/api/bonos/validar/:codigo', requireAuthWithTenant, BonosController.validar);
 router.use('/soporte', requireAuthWithTenant, soporteTenantRoutes);
 router.use('/pos', requireAuthWithTenant, requirePlanFeature('ventas'), requirePermission('pos.ver'), posRoutes);
 // Sync desktop <-> producción: sin requirePlanFeature/requirePermission propios.
