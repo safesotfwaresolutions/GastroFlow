@@ -200,6 +200,9 @@ window.POS_PAGO = {
             item.precio = item.precio_original;
             item.descuento_porcentaje = 0;
             item.descuento_valor = 0;
+            // Libera la línea: si tenía una promo "por cantidad" pendiente, vuelve a
+            // quedar bajo el control de recalcularPromocionesPorCantidad.
+            item.descuento_manual = false;
         }
         POS_UI.renderCart();
         bootstrap.Modal.getInstance(document.getElementById('posDescModal'))?.hide();

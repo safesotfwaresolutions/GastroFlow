@@ -1,6 +1,7 @@
 const db = require('../../../config/database');
 const InventarioService = require('../InventarioService');
 const ModificadorService = require('../ModificadorService');
+const PromocionService = require('../PromocionService');
 
 class AgregarItemService {
     static async execute({
@@ -55,7 +56,22 @@ class AgregarItemService {
             await ModificadorService.validarYCalcularSeleccion(tenantId, realProductId, modificadores_seleccion || [], {
                 permitido: puedeUsarModificadores
             });
-        const precioFinal = Number(precio) + precioAdicionalTotal;
+
+        // Promociones automáticas: se resuelven de nuevo acá, server-side, con la
+        // cantidad REAL que va a tener este producto en el pedido (lo que ya había
+        // + lo que se agrega ahora) -- el precio que trae el buscador/favoritos de
+        // Mesas es solo una vista previa (una promo "por cantidad" puede activarse
+        // recién con esta unidad, o el producto puede haber cambiado de precio
+        // entre que se cargó la lista y este clic). Igual que con los toppings, el
+        // catálogo en BD manda, no lo que calculó el frontend.
+        const precioBase = await AgregarItemService._resolverPrecioConPromo(
+            tenantId,
+            realProductId,
+            pedidoId,
+            Number.parseFloat(cantidad) || 0,
+            Number(precio)
+        );
+        const precioFinal = precioBase + precioAdicionalTotal;
         const subtotal = Number(cantidad) * precioFinal;
         const mesaId = pedidoRow.mesa_id;
 
@@ -113,6 +129,44 @@ class AgregarItemService {
         }
 
         return { id: result.insertId };
+    }
+
+    /**
+     * Precio unitario base (sin toppings) para agregar `cantidadNueva` unidades de
+     * `realProductId` a `pedidoId`: suma lo que ya había de ese producto en el
+     * pedido (no cancelado) + lo que se agrega ahora, y resuelve la promoción
+     * automática con esa cantidad total real -- así una promo "por cantidad" (ej.
+     * solo si compran 2 o más) se activa en el momento correcto, no antes.
+     * Si el producto no aparece en el catálogo (no debería pasar con un
+     * realProductId válido) o no hay ninguna promo, cae al precio que mandó el
+     * cliente (comportamiento de siempre).
+     */
+    static async _resolverPrecioConPromo(tenantId, realProductId, pedidoId, cantidadNueva, precioCliente) {
+        const [prodRows] = await db.query(
+            'SELECT precio_unidad, categoria_id FROM productos WHERE id = ? AND tenant_id = ?',
+            [realProductId, tenantId]
+        );
+        if (prodRows.length === 0) {
+            return precioCliente;
+        }
+        const { precio_unidad: precioCatalogo, categoria_id: categoriaId } = prodRows[0];
+
+        const [existentesRows] = await db.query(
+            `SELECT COALESCE(SUM(cantidad), 0) AS total FROM pedido_items
+             WHERE pedido_id = ? AND producto_id = ? AND estado <> 'cancelado'`,
+            [pedidoId, realProductId]
+        );
+        const cantidadTotal = Number(existentesRows[0].total) + cantidadNueva;
+
+        const descuentosPromo = await PromocionService.getDescuentoPorProductos(tenantId, [
+            { producto_id: realProductId, categoria_id: categoriaId, cantidad: cantidadTotal }
+        ]);
+        const promo = descuentosPromo.get(realProductId);
+        if (!promo) {
+            return precioCliente;
+        }
+        const precioBase = Number(precioCatalogo);
+        return Math.max(0, precioBase - PromocionService.calcularDescuento(promo, precioBase));
     }
 
     /**

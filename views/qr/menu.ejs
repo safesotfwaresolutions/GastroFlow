@@ -62,7 +62,8 @@
                 <h3 class="category-title"><%= cat.nombre %></h3>
                 
                 <% cat.productos.forEach(prod => { %>
-                    <div class="product-card" data-id="<%= prod.id %>" data-nombre="<%= prod.nombre %>" data-precio="<%= prod.precio %>" data-descripcion="<%= prod.descripcion %>" data-imagen="<%= prod.imagen_url || '' %>" data-pide-nota="<%= prod.pide_nota ? 1 : 0 %>" data-tiene-modificadores="<%= (modificadores && modificadores[prod.id]) ? 1 : 0 %>" onclick="showProductDetails(this, event)">
+                    <% const precioMostrado = prod.precio_promocion != null ? prod.precio_promocion : prod.precio; %>
+                    <div class="product-card" data-id="<%= prod.id %>" data-nombre="<%= prod.nombre %>" data-precio="<%= precioMostrado %>" data-descripcion="<%= prod.descripcion %>" data-imagen="<%= prod.imagen_url || '' %>" data-pide-nota="<%= prod.pide_nota ? 1 : 0 %>" data-tiene-modificadores="<%= (modificadores && modificadores[prod.id]) ? 1 : 0 %>" onclick="showProductDetails(this, event)">
                         <% if (prod.imagen_url) { %>
                             <img src="<%= prod.imagen_url %>" class="product-img" alt="<%= prod.nombre %>">
                         <% } else { %>
@@ -71,9 +72,21 @@
                             </div>
                         <% } %>
                         <div class="product-info">
-                            <h4 class="product-name"><%= prod.nombre %></h4>
+                            <h4 class="product-name">
+                                <%= prod.nombre %>
+                                <% if (prod.promocion_nombre) { %>
+                                    <span class="badge bg-warning text-dark" style="font-size:.65em;"><%= prod.promocion_nombre %></span>
+                                <% } %>
+                            </h4>
                             <p class="product-desc"><%= prod.descripcion %></p>
-                            <p class="product-price">$<%= Number(prod.precio).toLocaleString('es-CO') %></p>
+                            <% if (prod.precio_promocion != null) { %>
+                                <p class="product-price">
+                                    <s class="text-muted" style="font-size:.8em;">$<%= Number(prod.precio).toLocaleString('es-CO') %></s>
+                                    <span class="text-success">$<%= Number(prod.precio_promocion).toLocaleString('es-CO') %></span>
+                                </p>
+                            <% } else { %>
+                                <p class="product-price">$<%= Number(prod.precio).toLocaleString('es-CO') %></p>
+                            <% } %>
                         </div>
                         
                         <!-- Add Button -->

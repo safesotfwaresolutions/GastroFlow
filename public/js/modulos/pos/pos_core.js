@@ -79,6 +79,17 @@ window.POS = {
         POS_MODIFICADORES.abrir(producto);
     },
 
+    // Convierte el descuento de una promoción automática vigente en un % de
+    // línea (aunque la promo sea de valor fijo), para reusar tal cual el mismo
+    // pipeline del descuento manual (badge, cálculo de subtotal, envío a
+    // /pos/vender, ticket) sin tener que recalcular al cambiar la cantidad --
+    // un % escala solo con item.cantidad, un $ fijo por unidad no.
+    porcentajePromo(producto, precioOriginal) {
+        if (producto.precio_promocion == null || !precioOriginal) return 0;
+        const descuentoUnitario = Math.max(0, precioOriginal - Number(producto.precio_promocion));
+        return Math.min(100, Math.round((descuentoUnitario / precioOriginal) * 10000) / 100);
+    },
+
     // Agrega un producto sin modificadores (comportamiento de siempre).
     agregarSimple(producto) {
         const existing = this.state.cart.find(i => i.producto_id === producto.id && !i.modificadores_hash);
@@ -92,8 +103,10 @@ window.POS = {
                 precio,
                 precio_original: precio,
                 cantidad: 1,
-                descuento_porcentaje: 0,
+                descuento_porcentaje: this.porcentajePromo(producto, precio),
                 descuento_valor: 0,
+                descuento_manual: false,
+                promocion_regla: producto.promocion_regla || null,
                 categoria_id: producto.categoria_id,
                 unidad: 'UND',
                 modificadores_seleccion: [],
@@ -104,6 +117,42 @@ window.POS = {
         }
         POS_UI.renderCart();
         POS_UI.flashCard(producto.id);
+    },
+
+    // Promociones "por cantidad" (cantidad_minima > 1, ej. "solo si compran 2 o
+    // más"): a diferencia de precio_promocion (ya resuelto al cargar el catálogo,
+    // válido desde la primera unidad), estas dependen de cuántas unidades de ese
+    // producto terminen en el carrito -- se recalculan en cada render, sumando
+    // cantidad entre TODAS las líneas del mismo producto (aunque tengan distintos
+    // toppings). Nunca toca una línea con descuento_manual (el cajero ya decidió
+    // algo distinto para esa línea a propósito).
+    recalcularPromocionesPorCantidad() {
+        const totalPorProducto = {};
+        this.state.cart.forEach(item => {
+            if (item.producto_id) {
+                totalPorProducto[item.producto_id] = (totalPorProducto[item.producto_id] || 0) + item.cantidad;
+            }
+        });
+        this.state.cart.forEach(item => {
+            if (!item.promocion_regla || item.descuento_manual) return;
+            const totalProducto = totalPorProducto[item.producto_id] || 0;
+            const regla = item.promocion_regla;
+            if (totalProducto >= regla.cantidad_minima) {
+                if (regla.valor_tipo === 'porcentaje') {
+                    item.descuento_porcentaje = Math.min(100, Math.max(0, Number(regla.valor) || 0));
+                    item.descuento_valor = 0;
+                } else {
+                    // descuento_valor es el total de LA LÍNEA (ver itemSubtotal), no por
+                    // unidad -- se multiplica por la cantidad de esta línea puntual.
+                    const descuentoUnitario = Math.min(item.precio, Math.max(0, Number(regla.valor) || 0));
+                    item.descuento_valor = Math.round(descuentoUnitario * item.cantidad * 100) / 100;
+                    item.descuento_porcentaje = 0;
+                }
+            } else {
+                item.descuento_porcentaje = 0;
+                item.descuento_valor = 0;
+            }
+        });
     },
 
     // Agrega un producto con toppings elegidos. Dos líneas del mismo producto con
@@ -122,8 +171,10 @@ window.POS = {
                 precio,
                 precio_original: precio,
                 cantidad: 1,
-                descuento_porcentaje: 0,
+                descuento_porcentaje: this.porcentajePromo(producto, precio),
                 descuento_valor: 0,
+                descuento_manual: false,
+                promocion_regla: producto.promocion_regla || null,
                 categoria_id: producto.categoria_id,
                 unidad: 'UND',
                 modificadores_seleccion: seleccion,
@@ -193,6 +244,9 @@ window.POS = {
     setDescuento(idx, desc) {
         const item = this.state.cart[idx];
         if (!item) return;
+        // El cajero decidió esto a propósito: recalcularPromocionesPorCantidad ya
+        // no debe pisarlo (ver quitarDescuento en pos_pago.js para revertir esto).
+        item.descuento_manual = true;
         const obj = typeof desc === 'object' && desc !== null ? desc : { tipo: 'porcentaje', valor: desc };
         const valor = Math.max(Number.parseFloat(obj.valor) || 0, 0);
         if (obj.tipo === 'valor') {

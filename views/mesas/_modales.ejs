@@ -158,10 +158,16 @@
             <% (typeof productos !=='undefined' ? productos : []).filter(p=> p.es_favorito).forEach(p => { %>
                 <button type="button" class="producto-fav-card" data-id="<%= p.id %>"
                     data-nombre="<%= p.nombre %>" data-precio="<%= p.precio_unidad %>"
+                    data-precio-promocion="<%= p.precio_promocion != null ? p.precio_promocion : '' %>"
+                    data-promocion-nombre="<%= p.promocion_nombre || '' %>"
                     data-categoria="<%= p.categoria_id %>" data-categoria-nombre="<%= p.categoria_nombre %>"
                     data-pide-nota="<%= p.pide_nota ? 1 : 0 %>">
                     <span class="fav-card-name"><%= p.nombre %></span>
-                    <span class="fav-card-price">$<%= Number(p.precio_unidad).toLocaleString('es-CO') %></span>
+                    <% if (p.precio_promocion != null) { %>
+                        <span class="fav-card-price"><s class="text-muted" style="font-size:.8em;">$<%= Number(p.precio_unidad).toLocaleString('es-CO') %></s> $<%= Number(p.precio_promocion).toLocaleString('es-CO') %></span>
+                    <% } else { %>
+                        <span class="fav-card-price">$<%= Number(p.precio_unidad).toLocaleString('es-CO') %></span>
+                    <% } %>
                 </button>
             <% }) %>
             <% if ((typeof productos !=='undefined' ? productos : []).filter(p=> p.es_favorito).length === 0) { %>

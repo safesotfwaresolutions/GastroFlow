@@ -3,6 +3,7 @@ const MenuQRRepository = require('../../repositories/Public/MenuQRRepository');
 const RealtimeEvents = require('../Shared/RealtimeEvents');
 const InventarioService = require('../Tenant/InventarioService'); // Para validación de stock
 const ModificadorService = require('../Tenant/ModificadorService'); // Toppings/modificadores
+const PromocionService = require('../Tenant/PromocionService');
 
 class PedidoQRService {
     static async procesarPedido(qrToken, itemsInput, notasGlobales, clientIp, cookies = {}) {
@@ -60,7 +61,7 @@ class PedidoQRService {
             // 2. Extraer IDs de productos únicos y validar existencias / precios reales
             const productoIds = [...new Set(itemsInput.map(i => Number(i.producto_id)))];
             const [productosDb] = await connection.query(
-                `SELECT id, precio_unidad, nombre FROM productos WHERE id IN (?) AND tenant_id = ? AND activo = 1`,
+                `SELECT id, precio_unidad, nombre, categoria_id FROM productos WHERE id IN (?) AND tenant_id = ? AND activo = 1`,
                 [productoIds, tenantId]
             );
 
@@ -112,6 +113,36 @@ class PedidoQRService {
                 await connection.query("UPDATE mesas SET estado = 'ocupada' WHERE id = ?", [mesaId]);
             }
 
+            // Promociones "por cantidad" (cantidad_minima > 1) dependen de cuántas
+            // unidades del mismo producto va a tener el pedido en total -- lo que ya
+            // estaba en la mesa (si el pedido no es nuevo) MÁS lo que se pide ahora.
+            // El precio que ve el cliente en el menú (MenuQRService) es solo una
+            // vista previa; el que realmente se cobra se resuelve de nuevo acá,
+            // server-side, igual que los toppings -- nunca se confía en el cliente.
+            const cantidadPorProducto = new Map();
+            if (existentes.length > 0) {
+                const [existentesItems] = await connection.query(
+                    `SELECT producto_id, COALESCE(SUM(cantidad), 0) AS total
+                     FROM pedido_items WHERE pedido_id = ? AND estado <> 'cancelado'
+                     GROUP BY producto_id`,
+                    [pedidoId]
+                );
+                existentesItems.forEach(r => cantidadPorProducto.set(Number(r.producto_id), Number(r.total)));
+            }
+            itemsInput.forEach(i => {
+                const pid = Number(i.producto_id);
+                const cant = Number.parseFloat(i.cantidad) || 0;
+                cantidadPorProducto.set(pid, (cantidadPorProducto.get(pid) || 0) + cant);
+            });
+            const descuentosPromo = await PromocionService.getDescuentoPorProductos(
+                tenantId,
+                productosDb.map(p => ({
+                    producto_id: p.id,
+                    categoria_id: p.categoria_id,
+                    cantidad: cantidadPorProducto.get(Number(p.id)) || 0
+                }))
+            );
+
             // 4. Insertar los items y acumular el nuevo total
             let totalItemsNuevos = 0;
 
@@ -150,7 +181,12 @@ class PedidoQRService {
                     console.warn(`[Menu QR] Venta sin stock suficiente: Producto ID ${prod.id} en Tenant ${tenantId}`);
                 }
 
-                const precioUnitario = Number(prod.precio_unidad) + precioAdicionalTotal;
+                let precioBase = Number(prod.precio_unidad);
+                const promo = descuentosPromo.get(prod.id);
+                if (promo) {
+                    precioBase = Math.max(0, precioBase - PromocionService.calcularDescuento(promo, precioBase));
+                }
+                const precioUnitario = precioBase + precioAdicionalTotal;
                 const subtotal = cantidad * precioUnitario;
                 totalItemsNuevos += subtotal;
 

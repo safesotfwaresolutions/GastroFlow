@@ -6,6 +6,7 @@
 
 const ProductRepository = require('../../repositories/Tenant/ProductRepository');
 const CategoryRepository = require('../../repositories/Admin/CategoryRepository');
+const PromocionService = require('./PromocionService');
 const db = require('../../config/database');
 
 class ProductService {
@@ -44,7 +45,8 @@ class ProductService {
         if (!query || query.trim().length === 0) {
             return [];
         }
-        return await ProductRepository.search(query.trim(), tenantId, 10);
+        const productos = await ProductRepository.search(query.trim(), tenantId, 10);
+        return PromocionService.anotarProductos(tenantId, productos, { precioKey: 'precio_unidad' });
     }
 
     /**

@@ -1,8 +1,12 @@
 const POSRepository = require('../../repositories/Tenant/POSRepository');
+const PromocionService = require('./PromocionService');
 
 class POSService {
     static async getProductosForPOS(tenantId) {
-        const productos = await POSRepository.getProductosActivos(tenantId);
+        const productosBase = await POSRepository.getProductosActivos(tenantId);
+        const productos = await PromocionService.anotarProductos(tenantId, productosBase, {
+            precioKey: 'precio_unidad'
+        });
 
         const categoriasMap = new Map();
         for (const p of productos) {

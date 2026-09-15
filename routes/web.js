@@ -61,6 +61,7 @@ const clasificacionRoutes = require('./tenant/clasificacion');
 const syncRoutes = require('./tenant/sync');
 const bonosRoutes = require('./tenant/bonos');
 const BonosController = require('../app/Http/Controllers/Tenant/BonosController');
+const promocionesRoutes = require('./tenant/promociones');
 const onboardingRoutes = require('./onboarding');
 const adminOnboardingRoutes = require('./admin/onboarding');
 const NotificationController = require('../app/Http/Controllers/Tenant/NotificationController');
@@ -169,6 +170,7 @@ router.use('/bonos', requireAuthWithTenant, bonosRoutes);
 // redimir: solo requiere estar autenticado en el tenant (no bonos.ver/gestionar),
 // igual que cualquiera que pueda facturar ya puede registrar un abono.
 router.get('/api/bonos/validar/:codigo', requireAuthWithTenant, BonosController.validar);
+router.use('/promociones', requireAuthWithTenant, promocionesRoutes);
 router.use('/soporte', requireAuthWithTenant, soporteTenantRoutes);
 router.use('/pos', requireAuthWithTenant, requirePlanFeature('ventas'), requirePermission('pos.ver'), posRoutes);
 // Sync desktop <-> producción: sin requirePlanFeature/requirePermission propios.

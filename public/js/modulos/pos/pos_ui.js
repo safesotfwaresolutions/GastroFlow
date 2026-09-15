@@ -89,14 +89,28 @@ window.POS_UI = {
             const qty = cartMap[p.id] || 0;
             const badge = qty ? `<span class="ppc-qty-badge">${qty}</span>` : '';
             const inCartClass = qty ? ' ppc-in-cart' : '';
+            const precioHtml = p.precio_promocion != null
+                ? `<span class="ppc-price"><s class="text-muted small">${money(p.precio_unidad)}</s> ${money(p.precio_promocion)}</span>`
+                : `<span class="ppc-price">${money(p.precio_unidad)}</span>`;
+            let promoBadge = '';
+            if (p.precio_promocion != null) {
+                promoBadge = `<span class="ppc-promo-badge" title="${p.promocion_nombre || 'Promoción'}"><i class="bi bi-percent"></i></span>`;
+            } else if (p.promocion_regla) {
+                // Promo "por cantidad" (ej. desde 2 unidades): todavía no se sabe si el
+                // cliente va a llevar suficientes, así que no se muestra un precio
+                // rebajado -- solo el aviso. Se activa sola al agregar la 2da unidad
+                // (ver POS.recalcularPromocionesPorCantidad).
+                promoBadge = `<span class="ppc-promo-badge" style="background:#0dcaf0" title="${p.promocion_regla.nombre}: desde ${p.promocion_regla.cantidad_minima} unidades"><i class="bi bi-percent"></i></span>`;
+            }
             return `<button class="pos-product-card${inCartClass}" data-pid="${p.id}">
                 ${badge}
+                ${promoBadge}
                 <span class="ppc-icon" style="background:${soft};color:${color}">
                     <i class="bi ${catIcon(p.categoria_nombre)}"></i>
                 </span>
                 <span class="ppc-cat-label" style="color:${color}">${p.categoria_nombre || 'Sin cat.'}</span>
                 <span class="ppc-name">${p.nombre}</span>
-                <span class="ppc-price">${money(p.precio_unidad)}</span>
+                ${precioHtml}
             </button>`;
         }).join('');
 
@@ -116,6 +130,11 @@ window.POS_UI = {
     // ─── Carrito ──────────────────────────────────────────────────
     // IMPORTANTE: siempre regenera innerHTML — nunca reutiliza nodos (fix del bug de posCartEmpty desconectado)
     renderCart() {
+        // Promociones "por cantidad" (ej. solo si compran 2 o más del mismo
+        // producto): se recalculan en cada render del carrito, así reaccionan al
+        // vuelo cuando la cantidad total de un producto cruza el mínimo (o baja de
+        // él si se quita una unidad), sin round-trip al servidor.
+        POS.recalcularPromocionesPorCantidad();
         const { cart } = POS.state;
         const container = document.getElementById('posCartItems');
         if (!container) return;

@@ -1,4 +1,5 @@
 const MenuQRRepository = require('../../repositories/Public/MenuQRRepository');
+const PromocionService = require('../Tenant/PromocionService');
 
 class MenuQRService {
     /**
@@ -22,7 +23,11 @@ class MenuQRService {
         }
 
         // 3. Obtener Categorías y Productos
-        const rawProducts = await MenuQRRepository.getCategoriasYProductosActivos(tenant.id);
+        const rawProductsSinPromo = await MenuQRRepository.getCategoriasYProductosActivos(tenant.id);
+        const rawProducts = await PromocionService.anotarProductos(tenant.id, rawProductsSinPromo, {
+            idKey: 'producto_id',
+            precioKey: 'precio_unidad'
+        });
         const categorias = this._agruparProductosPorCategoria(rawProducts);
 
         // 4. Obtener modificadores/toppings de esos productos y armar el mapa producto_id -> grupos[]
@@ -50,6 +55,8 @@ class MenuQRService {
                 nombre: row.nombre,
                 descripcion: row.descripcion || '',
                 precio: row.precio_unidad,
+                precio_promocion: row.precio_promocion !== undefined ? row.precio_promocion : null,
+                promocion_nombre: row.promocion_nombre || null,
                 imagen_url: row.imagen_url || null,
                 pide_nota: row.pide_nota === 1 || row.pide_nota === true ? 1 : 0
             });

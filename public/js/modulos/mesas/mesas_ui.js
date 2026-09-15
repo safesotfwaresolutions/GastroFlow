@@ -107,7 +107,12 @@ window.MesasModule.seleccionarProducto = async function(p) {
     if (!resultadoMods) return; // el usuario canceló la selección de toppings
 
     const unidad = 'UND';
-    const precio = Number(p.precio_unidad != null ? p.precio_unitario || p.precio_unidad : (p.precio || 0));
+    // precio_promocion (si el buscador de /api/productos/buscar anotó una promo
+    // vigente ahora) tiene prioridad sobre el precio de lista -- AgregarItemService
+    // confía en el precio que manda el mesero (igual que ya confía en cualquier
+    // descuento manual), así que basta con mandar el precio ya rebajado.
+    const precioLista = Number(p.precio_unidad != null ? p.precio_unitario || p.precio_unidad : (p.precio || 0));
+    const precio = p.precio_promocion != null ? Number(p.precio_promocion) : precioLista;
     const body = {
       producto_id: p.id, cantidad: 1, unidad, precio: Number(precio), nota,
       modificadores_seleccion: resultadoMods.seleccion
@@ -301,15 +306,25 @@ window.refreshMesas = async function() {
 // anidación de callbacks a 5 niveles (input > setTimeout > forEach > click).
 function crearItemResultadoProducto(mod, list, p) {
   const precio = p.precio_unidad != null ? p.precio_unidad : (p.precio || 0);
+  const precioHtml = p.precio_promocion != null
+    ? `<div><s class="text-muted small">$${Number(precio).toLocaleString()}</s></div><span class="badge bg-success">$${Number(p.precio_promocion).toLocaleString()}</span>`
+    : `<span class="badge bg-light text-dark border">$${Number(precio).toLocaleString()}</span>`;
+  // Promo "por cantidad" (ej. desde 2 unidades): no se sabe todavía si el pedido
+  // va a llegar a ese mínimo, así que no se muestra un precio rebajado -- solo el
+  // aviso. Se activa sola al agregar la unidad que complete el mínimo (el precio
+  // se resuelve de nuevo en el servidor, ver AgregarItemService).
+  const promoRegla = p.promocion_regla
+    ? ` <span class="badge bg-info-subtle text-info-emphasis">${p.promocion_regla.nombre}: desde ${p.promocion_regla.cantidad_minima}u</span>`
+    : '';
   const item = $(`
     <a href="#" class="list-group-item list-group-item-action">
       <div class="d-flex justify-content-between align-items-center">
         <div>
           <div class="fw-bold text-primary">${p.codigo}</div>
-          <div class="text-dark">${p.nombre}</div>
+          <div class="text-dark">${p.nombre}${p.promocion_nombre ? ' <span class=\"badge bg-warning-subtle text-warning-emphasis\">' + p.promocion_nombre + '</span>' : ''}${promoRegla}</div>
         </div>
         <div class="text-end">
-            <span class="badge bg-light text-dark border">$${Number(precio).toLocaleString()}</span>
+            ${precioHtml}
         </div>
       </div>
     </a>`);
@@ -454,10 +469,13 @@ $(function () {
 
   // Event handlers for favorites
   $(document).on('click', '.producto-fav-card', function () {
+    const precioPromocion = $(this).data('precio-promocion');
     const p = {
       id: $(this).data('id'),
       nombre: $(this).data('nombre'),
       precio_unidad: $(this).data('precio'),
+      precio_promocion: precioPromocion !== '' && precioPromocion != null ? Number(precioPromocion) : null,
+      promocion_nombre: $(this).data('promocion-nombre') || null,
       categoria_nombre: $(this).data('categoria-nombre'),
       pide_nota: Number($(this).data('pide-nota')) === 1 ? 1 : 0
     };

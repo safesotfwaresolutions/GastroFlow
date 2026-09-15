@@ -4,6 +4,7 @@ const ProductRepository = require('../../../../../repositories/Tenant/ProductRep
 const CajaService = require('../../../../../services/Tenant/CajaService');
 const ModificadorService = require('../../../../../services/Tenant/ModificadorService');
 const AuthService = require('../../../../../services/Shared/AuthService');
+const PromocionService = require('../../../../../services/Tenant/PromocionService');
 
 class MesaDashboardController {
     // GET /mesas
@@ -33,7 +34,12 @@ class MesaDashboardController {
             const mesasVirtuales = mesasData.filter(m => m.tipo === 'virtual' && m.estado !== 'libre');
 
             const categorias = await CategoryService.getAllActive(tenantId);
-            const productos = await ProductRepository.findAll(tenantId);
+            const productosSinPromo = await ProductRepository.findAll(tenantId);
+            // Los favoritos de la grilla (fav-grid) se arman con esta misma lista, así
+            // que necesitan la promo anotada igual que el buscador (/api/productos/buscar).
+            const productos = await PromocionService.anotarProductos(tenantId, productosSinPromo, {
+                precioKey: 'precio_unidad'
+            });
             const avisoCajaCerrada = await CajaService.debeAvisarCajaCerrada(tenantId);
 
             res.render('mesas/index', {

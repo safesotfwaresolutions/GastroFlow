@@ -76,15 +76,20 @@ class ProductRepository {
         const searchTerm = `%${queryTerm}%`;
 
         // Buscamos productos reales y opcionalmente insumos de la categoría 'Cerámicas'
+        // p.categoria_id (y no solo categoria_nombre) hace falta para que
+        // PromocionService pueda resolver descuentos por categoría -- los
+        // insumos (rama de abajo) no tienen categoría de producto real, van con
+        // NULL, así que nunca les aplica una promo por categoría (sí podrían
+        // llevar una promo por producto puntual, pero no es un caso de uso hoy).
         const sql = `
-            (SELECT p.id, p.codigo, p.nombre, p.precio_unidad, c.nombre AS categoria_nombre, p.pide_nota, 0 AS is_insumo
+            (SELECT p.id, p.codigo, p.nombre, p.precio_unidad, p.categoria_id, c.nombre AS categoria_nombre, p.pide_nota, 0 AS is_insumo
             FROM productos p
             LEFT JOIN categorias c ON p.categoria_id = c.id
             WHERE p.tenant_id = ? AND p.activo = 1 AND (p.nombre LIKE ? OR p.codigo LIKE ?)
             ORDER BY p.nombre
             LIMIT ?)
             UNION ALL
-            (SELECT i.id + 1000000 AS id, i.codigo, i.nombre, COALESCE(i.precio_venta, 0) AS precio_unidad, pc.name AS categoria_nombre, 0 AS pide_nota, 1 AS is_insumo
+            (SELECT i.id + 1000000 AS id, i.codigo, i.nombre, COALESCE(i.precio_venta, 0) AS precio_unidad, NULL AS categoria_id, pc.name AS categoria_nombre, 0 AS pide_nota, 1 AS is_insumo
             FROM insumos i
             INNER JOIN parametros pc ON i.categoria_id = pc.id
             WHERE i.tenant_id = ? AND pc.name = 'Cerámicas' AND (i.nombre LIKE ? OR i.codigo LIKE ?)
