@@ -60,7 +60,8 @@ describe('PagarItemIndividualService (auditoría de pago por producto)', () => {
             .mockResolvedValueOnce([[itemRow]]) // SELECT item (cantidad total = 2)
             .mockResolvedValueOnce([[]]) // sin fila ya pagada
             .mockResolvedValueOnce([{ affectedRows: 1 }]) // UPDATE deja el sobrante
-            .mockResolvedValueOnce([{ insertId: 99 }]); // INSERT del sobrante como nueva fila sin pagar
+            .mockResolvedValueOnce([{ insertId: 99 }]) // INSERT del sobrante como nueva fila sin pagar
+            .mockResolvedValueOnce([[]]); // SELECT pedido_item_modificadores del item original (sin toppings)
 
         await PagarItemIndividualService.execute({
             tenantId: 1,
@@ -93,6 +94,28 @@ describe('PagarItemIndividualService (auditoría de pago por producto)', () => {
                 skipEvent: true
             })
         ).resolves.toEqual({ message: 'Item pagado correctamente' });
+    });
+
+    it('busca la fila ya pagada a fusionar filtrando también por precio_unitario y modificadores_hash (no solo producto_id)', async () => {
+        const itemConTopping = { ...itemRow, precio_unitario: 14000, modificadores_hash: '797,802,806' };
+        db.query
+            .mockResolvedValueOnce([[itemConTopping]]) // SELECT item
+            .mockResolvedValueOnce([[]]) // SELECT existingPaidRows
+            .mockResolvedValueOnce([{ affectedRows: 1 }]); // UPDATE pedido_items SET pagado = 1 ...
+
+        await PagarItemIndividualService.execute({
+            tenantId: 1,
+            itemId: 5,
+            forma_pago: 'efectivo',
+            cantidad: 2,
+            usuarioId: 7,
+            skipEvent: true
+        });
+
+        const [existingPaidQuery, existingPaidParams] = db.query.mock.calls[1];
+        expect(existingPaidQuery).toMatch(/precio_unitario\s*=\s*\?/);
+        expect(existingPaidQuery).toMatch(/modificadores_hash/);
+        expect(existingPaidParams).toEqual([10, 3, 'efectivo', 14000, '797,802,806']);
     });
 
     it('usuarioId es null si no se pasa (compatibilidad con llamadas viejas)', async () => {
