@@ -89,7 +89,8 @@ window.POS_MODIFICADORES = {
                     </span>
                     <span class="text-muted small">${Number(o.precio_adicional) > 0 ? '+$' + Number(o.precio_adicional).toLocaleString('es-CO') : ''}</span>
                 </label>`).join('');
-            return `<div class="pos-mod-grupo mb-3" data-grupo-id="${g.id}" data-obligatorio="${g.obligatorio ? 1 : 0}" data-minimo="${g.minimo_selecciones || 0}">
+            const maximo = g.tipo_seleccion === 'multiple' ? (g.maximo_selecciones || 0) : 0;
+            return `<div class="pos-mod-grupo mb-3" data-grupo-id="${g.id}" data-obligatorio="${g.obligatorio ? 1 : 0}" data-minimo="${g.minimo_selecciones || 0}" data-maximo="${maximo}">
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <strong>${g.nombre}</strong> ${hint}
                 </div>
@@ -128,10 +129,20 @@ window.POS_MODIFICADORES = {
 
         let valido = true;
         body.querySelectorAll('.pos-mod-grupo').forEach(div => {
+            const marcados = div.querySelectorAll('input:checked');
             if (div.dataset.obligatorio === '1') {
-                const marcados = div.querySelectorAll('input:checked').length;
                 const minimo = Math.max(1, Number.parseInt(div.dataset.minimo, 10) || 0);
-                if (marcados < minimo) valido = false;
+                if (marcados.length < minimo) valido = false;
+            }
+            // Los grupos "multiple" con tope se renderizan como checkboxes: sin este
+            // bloqueo el usuario podía marcar más de las permitidas y la petición sólo
+            // fallaba al confirmar (400 del backend), tras haberse cerrado el modal.
+            const maximo = Number.parseInt(div.dataset.maximo, 10) || 0;
+            if (maximo > 0) {
+                const alcanzoMaximo = marcados.length >= maximo;
+                div.querySelectorAll('input[type="checkbox"]').forEach(inp => {
+                    if (!inp.checked) inp.disabled = alcanzoMaximo;
+                });
             }
         });
         document.getElementById('btnPosModificadoresAgregar').disabled = !valido;
