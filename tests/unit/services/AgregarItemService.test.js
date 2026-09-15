@@ -9,75 +9,68 @@ jest.mock('../../../services/Tenant/ModificadorService', () => ({
         modificadoresHash: null
     })
 }));
-jest.mock('../../../services/Tenant/PromocionService');
+jest.mock('../../../services/Tenant/Mesas/SincronizarPrecioPromoService');
 
 const db = require('../../../config/database');
-const PromocionService = require('../../../services/Tenant/PromocionService');
+const SincronizarPrecioPromoService = require('../../../services/Tenant/Mesas/SincronizarPrecioPromoService');
 const AgregarItemService = require('../../../services/Tenant/Mesas/AgregarItemService');
 
-describe('AgregarItemService._resolverPrecioConPromo', () => {
+describe('AgregarItemService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    it('cae al precio del cliente si el producto no existe en el catálogo', async () => {
-        db.query.mockResolvedValueOnce([[]]); // SELECT productos -> vacío
-
-        const precio = await AgregarItemService._resolverPrecioConPromo(1, 99, 10, 1, 5000);
-
-        expect(precio).toBe(5000);
-        expect(PromocionService.getDescuentoPorProductos).not.toHaveBeenCalled();
-    });
-
-    it('cae al precio del cliente si no hay ninguna promo activa', async () => {
+    it('inserta el item y sincroniza el precio de promo del producto agregado', async () => {
         db.query
-            .mockResolvedValueOnce([[{ precio_unidad: 10000, categoria_id: 2 }]]) // SELECT productos
-            .mockResolvedValueOnce([[{ total: 0 }]]); // SELECT SUM cantidad ya en el pedido
-        PromocionService.getDescuentoPorProductos.mockResolvedValue(new Map());
+            .mockResolvedValueOnce([[{ id: 10, mesa_id: 1 }]]) // SELECT pedidos
+            .mockResolvedValueOnce([{ insertId: 55 }]) // INSERT pedido_items
+            .mockResolvedValueOnce([{ affectedRows: 1 }]); // UPDATE mesas -> ocupada
 
-        const precio = await AgregarItemService._resolverPrecioConPromo(1, 7, 10, 1, 8000);
+        const result = await AgregarItemService.execute({
+            tenantId: 1,
+            pedidoId: 10,
+            producto_id: 7,
+            cantidad: 1,
+            unidad: 'UND',
+            precio: 10000
+        });
 
-        expect(precio).toBe(8000); // precio del cliente, no el de catálogo
+        expect(result).toEqual({ id: 55 });
+        expect(SincronizarPrecioPromoService.ejecutar).toHaveBeenCalledWith(1, 10, 7);
     });
 
-    it('usa el precio de catálogo menos el descuento cuando la promo sí aplica', async () => {
+    it('rechaza si falta producto_id, cantidad o precio', async () => {
+        await expect(
+            AgregarItemService.execute({ tenantId: 1, pedidoId: 10, cantidad: 1, precio: 5000 })
+        ).rejects.toThrow('producto_id, cantidad y precio son requeridos');
+        expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('lanza si el pedido no existe', async () => {
+        db.query.mockResolvedValueOnce([[]]); // SELECT pedidos -> vacío
+        await expect(
+            AgregarItemService.execute({ tenantId: 1, pedidoId: 999, producto_id: 7, cantidad: 1, precio: 5000 })
+        ).rejects.toThrow('Pedido no encontrado');
+        expect(SincronizarPrecioPromoService.ejecutar).not.toHaveBeenCalled();
+    });
+
+    it('sincroniza con el producto REAL (espejo) cuando el id es un insumo virtual (>= 1.000.000)', async () => {
         db.query
-            .mockResolvedValueOnce([[{ precio_unidad: 10000, categoria_id: 2 }]])
-            .mockResolvedValueOnce([[{ total: 0 }]]);
-        PromocionService.getDescuentoPorProductos.mockResolvedValue(
-            new Map([[7, { valor_tipo: 'porcentaje', valor: 20 }]])
-        );
-        PromocionService.calcularDescuento.mockReturnValue(2000);
+            .mockResolvedValueOnce([[{ id: 3, codigo: 'CER1', nombre: 'Taza', precio_venta: 8000 }]]) // SELECT insumos
+            .mockResolvedValueOnce([[{ id: 42 }]]) // SELECT productos existente con ese código -> ya existe el espejo
+            .mockResolvedValueOnce([[{ id: 10, mesa_id: 1 }]]) // SELECT pedidos
+            .mockResolvedValueOnce([{ insertId: 60 }]) // INSERT pedido_items
+            .mockResolvedValueOnce([{ affectedRows: 1 }]); // UPDATE mesas
 
-        const precio = await AgregarItemService._resolverPrecioConPromo(1, 7, 10, 1, 999999);
+        await AgregarItemService.execute({
+            tenantId: 1,
+            pedidoId: 10,
+            producto_id: 1000003, // insumo virtual (1000000 + 3)
+            cantidad: 1,
+            precio: 8000
+        });
 
-        // 10000 (catálogo) - 2000 (descuento) = 8000, ignorando el precio absurdo del cliente
-        expect(precio).toBe(8000);
-    });
-
-    it('suma lo que ya había en el pedido + lo nuevo antes de resolver la promo (activación por cantidad)', async () => {
-        db.query.mockResolvedValueOnce([[{ precio_unidad: 5000, categoria_id: 3 }]]).mockResolvedValueOnce([
-            [{ total: 1 }] // ya había 1 unidad en el pedido
-        ]);
-        PromocionService.getDescuentoPorProductos.mockResolvedValue(new Map());
-
-        await AgregarItemService._resolverPrecioConPromo(1, 7, 10, 1, 5000); // agrega 1 más
-
-        expect(PromocionService.getDescuentoPorProductos).toHaveBeenCalledWith(1, [
-            { producto_id: 7, categoria_id: 3, cantidad: 2 } // 1 existente + 1 nueva
-        ]);
-    });
-
-    it('nunca queda un precio negativo si el descuento supera el precio de catálogo', async () => {
-        db.query
-            .mockResolvedValueOnce([[{ precio_unidad: 1000, categoria_id: 2 }]])
-            .mockResolvedValueOnce([[{ total: 0 }]]);
-        PromocionService.getDescuentoPorProductos.mockResolvedValue(
-            new Map([[7, { valor_tipo: 'valor', valor: 999 }]])
-        );
-        PromocionService.calcularDescuento.mockReturnValue(999);
-
-        const precio = await AgregarItemService._resolverPrecioConPromo(1, 7, 10, 1, 1000);
-        expect(precio).toBe(1);
+        // La promo se resuelve sobre el producto espejo real (42), no sobre el id virtual.
+        expect(SincronizarPrecioPromoService.ejecutar).toHaveBeenCalledWith(1, 10, 42);
     });
 });
