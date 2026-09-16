@@ -57,48 +57,74 @@ class AgregarItemService {
                 permitido: puedeUsarModificadores
             });
 
-        // El precio con el que se inserta es solo el de arranque (el que trae el
-        // buscador/favoritos de Mesas, una vista previa) -- SincronizarPrecioPromoService
-        // lo corrige justo abajo, resolviendo la promo con la cantidad TOTAL real de
-        // este producto en el pedido (incluyendo esta fila nueva) y aplicándola por
-        // igual a todas las filas del mismo producto, no solo a la que se agrega ahora.
-        const precioFinal = Number(precio) + precioAdicionalTotal;
-        const subtotal = Number(cantidad) * precioFinal;
         const mesaId = pedidoRow.mesa_id;
+        const notaNormalizada = nota || null;
 
-        const [result] = await db.query(
-            `INSERT INTO pedido_items (tenant_id, pedido_id, producto_id, cantidad, unidad_medida, precio_unitario, subtotal, estado, nota, modificadores_hash)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)`,
-            [
-                tenantId,
-                pedidoId,
-                realProductId,
-                cantidad,
-                unidad || 'UND',
-                precioFinal,
-                subtotal,
-                nota || null,
-                modificadoresHash
-            ]
+        // Si ya hay una fila del MISMO producto todavía "pendiente" (no enviada a
+        // cocina -- fusionar con una que ya está preparando/lista/servida dejaría a
+        // cocina sin enterarse de la unidad extra), con la MISMA nota y los MISMOS
+        // toppings (modificadores_hash, `<=>` para que NULL = NULL cuente como igual),
+        // se suma a esa fila en vez de crear una nueva -- dos clics seguidos del mismo
+        // producto sin nada distinto deben verse como una sola línea con cantidad 2,
+        // no como dos líneas idénticas. El precio lo termina fijando
+        // SincronizarPrecioPromoService más abajo en ambos casos, así que acá no hace
+        // falta calcularlo.
+        const [existentes] = await db.query(
+            `SELECT id, cantidad FROM pedido_items
+             WHERE pedido_id = ? AND producto_id = ? AND estado = 'pendiente'
+               AND modificadores_hash <=> ? AND nota <=> ?
+             LIMIT 1`,
+            [pedidoId, realProductId, modificadoresHash, notaNormalizada]
         );
 
-        if (lineasSnapshot.length > 0) {
-            const pedidoItemId = result.insertId;
-            const modificadoresValues = lineasSnapshot.map(m => [
-                pedidoItemId,
-                m.opcion_modificador_id,
-                m.grupo_nombre,
-                m.opcion_nombre,
-                m.precio_adicional,
-                m.cantidad || 1,
-                m.insumo_id || null,
-                m.cantidad_insumo || null,
-                m.unidad_insumo || null
-            ]);
-            await db.query(
-                'INSERT INTO pedido_item_modificadores (pedido_item_id, opcion_modificador_id, grupo_nombre, opcion_nombre, precio_adicional, cantidad, insumo_id, cantidad_insumo, unidad_insumo) VALUES ?',
-                [modificadoresValues]
+        let itemId;
+        if (existentes.length > 0) {
+            itemId = existentes[0].id;
+            const nuevaCantidad = Number(existentes[0].cantidad) + Number(cantidad);
+            await db.query('UPDATE pedido_items SET cantidad = ? WHERE id = ?', [nuevaCantidad, itemId]);
+        } else {
+            // El precio con el que se inserta es solo el de arranque (el que trae el
+            // buscador/favoritos de Mesas, una vista previa) -- SincronizarPrecioPromoService
+            // lo corrige justo abajo, resolviendo la promo con la cantidad TOTAL real de
+            // este producto en el pedido (incluyendo esta fila nueva) y aplicándola por
+            // igual a todas las filas del mismo producto.
+            const precioFinal = Number(precio) + precioAdicionalTotal;
+            const subtotal = Number(cantidad) * precioFinal;
+
+            const [result] = await db.query(
+                `INSERT INTO pedido_items (tenant_id, pedido_id, producto_id, cantidad, unidad_medida, precio_unitario, subtotal, estado, nota, modificadores_hash)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'pendiente', ?, ?)`,
+                [
+                    tenantId,
+                    pedidoId,
+                    realProductId,
+                    cantidad,
+                    unidad || 'UND',
+                    precioFinal,
+                    subtotal,
+                    notaNormalizada,
+                    modificadoresHash
+                ]
             );
+            itemId = result.insertId;
+
+            if (lineasSnapshot.length > 0) {
+                const modificadoresValues = lineasSnapshot.map(m => [
+                    itemId,
+                    m.opcion_modificador_id,
+                    m.grupo_nombre,
+                    m.opcion_nombre,
+                    m.precio_adicional,
+                    m.cantidad || 1,
+                    m.insumo_id || null,
+                    m.cantidad_insumo || null,
+                    m.unidad_insumo || null
+                ]);
+                await db.query(
+                    'INSERT INTO pedido_item_modificadores (pedido_item_id, opcion_modificador_id, grupo_nombre, opcion_nombre, precio_adicional, cantidad, insumo_id, cantidad_insumo, unidad_insumo) VALUES ?',
+                    [modificadoresValues]
+                );
+            }
         }
 
         if (mesaId) {
@@ -121,7 +147,7 @@ class AgregarItemService {
             console.error('Error al emitir evento SSE en AgregarItemService:', err);
         }
 
-        return { id: result.insertId };
+        return { id: itemId };
     }
 
     /**

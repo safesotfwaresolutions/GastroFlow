@@ -20,9 +20,10 @@ describe('AgregarItemService', () => {
         jest.clearAllMocks();
     });
 
-    it('inserta el item y sincroniza el precio de promo del producto agregado', async () => {
+    it('inserta una fila nueva si no hay ninguna igual todavía pendiente, y sincroniza el precio', async () => {
         db.query
             .mockResolvedValueOnce([[{ id: 10, mesa_id: 1 }]]) // SELECT pedidos
+            .mockResolvedValueOnce([[]]) // SELECT existentes -> ninguna
             .mockResolvedValueOnce([{ insertId: 55 }]) // INSERT pedido_items
             .mockResolvedValueOnce([{ affectedRows: 1 }]); // UPDATE mesas -> ocupada
 
@@ -37,6 +38,52 @@ describe('AgregarItemService', () => {
 
         expect(result).toEqual({ id: 55 });
         expect(SincronizarPrecioPromoService.ejecutar).toHaveBeenCalledWith(1, 10, 7);
+    });
+
+    it('fusiona con una fila pendiente del mismo producto (misma nota, mismos toppings) en vez de crear otra', async () => {
+        db.query
+            .mockResolvedValueOnce([[{ id: 10, mesa_id: 1 }]]) // SELECT pedidos
+            .mockResolvedValueOnce([[{ id: 8, cantidad: '1.00' }]]) // SELECT existentes -> ya hay una fila pendiente
+            .mockResolvedValueOnce([{ affectedRows: 1 }]) // UPDATE pedido_items SET cantidad
+            .mockResolvedValueOnce([{ affectedRows: 1 }]); // UPDATE mesas -> ocupada
+
+        const result = await AgregarItemService.execute({
+            tenantId: 1,
+            pedidoId: 10,
+            producto_id: 7,
+            cantidad: 1,
+            precio: 10000
+        });
+
+        expect(result).toEqual({ id: 8 }); // devuelve el id de la fila existente, no crea una nueva
+        const updateCall = db.query.mock.calls.find(
+            call => typeof call[0] === 'string' && call[0].startsWith('UPDATE pedido_items')
+        );
+        expect(updateCall[1]).toEqual([2, 8]); // 1 (ya tenía) + 1 (nueva) = 2
+        expect(SincronizarPrecioPromoService.ejecutar).toHaveBeenCalledWith(1, 10, 7);
+    });
+
+    it('busca la fila a fusionar filtrando por estado pendiente, nota y toppings (no cualquier fila del producto)', async () => {
+        db.query
+            .mockResolvedValueOnce([[{ id: 10, mesa_id: 1 }]])
+            .mockResolvedValueOnce([[]])
+            .mockResolvedValueOnce([{ insertId: 55 }])
+            .mockResolvedValueOnce([{ affectedRows: 1 }]);
+
+        await AgregarItemService.execute({
+            tenantId: 1,
+            pedidoId: 10,
+            producto_id: 7,
+            cantidad: 1,
+            precio: 10000,
+            nota: 'sin cebolla'
+        });
+
+        const [existentesQuery, existentesParams] = db.query.mock.calls[1];
+        expect(existentesQuery).toMatch(/estado = 'pendiente'/);
+        expect(existentesQuery).toMatch(/modificadores_hash\s*<=>\s*\?/);
+        expect(existentesQuery).toMatch(/nota\s*<=>\s*\?/);
+        expect(existentesParams).toEqual([10, 7, null, 'sin cebolla']);
     });
 
     it('rechaza si falta producto_id, cantidad o precio', async () => {
@@ -59,6 +106,7 @@ describe('AgregarItemService', () => {
             .mockResolvedValueOnce([[{ id: 3, codigo: 'CER1', nombre: 'Taza', precio_venta: 8000 }]]) // SELECT insumos
             .mockResolvedValueOnce([[{ id: 42 }]]) // SELECT productos existente con ese código -> ya existe el espejo
             .mockResolvedValueOnce([[{ id: 10, mesa_id: 1 }]]) // SELECT pedidos
+            .mockResolvedValueOnce([[]]) // SELECT existentes -> ninguna
             .mockResolvedValueOnce([{ insertId: 60 }]) // INSERT pedido_items
             .mockResolvedValueOnce([{ affectedRows: 1 }]); // UPDATE mesas
 
