@@ -20,6 +20,9 @@ const upload = multer({
 // GET /perfil - Vista perfil
 router.get('/', requirePermission('perfil.ver'), PerfilController.index);
 
+// GET /perfil/api/crecimiento - Datos del panel de crecimiento (tab Crecimiento)
+router.get('/api/crecimiento', requirePermission('perfil.ver'), PerfilController.crecimiento);
+
 // POST /perfil/actualizar - Actualizar datos y logo
 router.post('/actualizar', requirePermission('perfil.editar'), upload.single('logo'), PerfilController.update);
 

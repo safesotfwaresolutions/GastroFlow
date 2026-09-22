@@ -1,0 +1,46 @@
+<div class="tab-pane fade" id="crecimiento" role="tabpanel" aria-labelledby="crecimiento-tab">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <p class="text-muted mb-0 small">Ventas y crecimiento de tu negocio a lo largo del tiempo.</p>
+        <select class="form-select form-select-sm shadow-sm" id="crecimientoPeriodoSelect" style="min-width: 180px;">
+            <option value="7">Últimos 7 días</option>
+            <option value="30" selected>Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+            <option value="180">Últimos 6 meses</option>
+            <option value="365">Último año</option>
+        </select>
+    </div>
+
+    <div id="crecimientoLoading" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted small">Calculando estadísticas de crecimiento...</p>
+    </div>
+
+    <div id="crecimientoError" style="display:none;" class="text-center py-5 text-muted">
+        <i class="bi bi-x-circle fs-2 d-block mb-2 text-danger"></i>
+        <span class="text-danger">Error al cargar el panel de crecimiento.</span>
+    </div>
+
+    <div id="crecimientoContent" style="display:none;">
+        <div class="row g-3 mb-4" id="crecimientoKpis"></div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3"><i class="bi bi-clock-history me-2 text-primary"></i>Tendencia en el
+                    tiempo</h6>
+                <div style="position:relative;height:300px;">
+                    <canvas id="chartCrecimientoTendencia"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3"><i class="bi bi-graph-up me-2 text-primary"></i>Crecimiento mensual
+                    (últimos 12 meses)</h6>
+                <div style="position:relative;height:280px;">
+                    <canvas id="chartCrecimientoMensual"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

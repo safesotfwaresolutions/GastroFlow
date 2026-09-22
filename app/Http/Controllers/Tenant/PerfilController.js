@@ -1,6 +1,9 @@
 const TenantService = require('../../../../services/Admin/TenantService');
 const StatsService = require('../../../../services/Tenant/StatsService');
 const ReporteMensualService = require('../../../../services/Tenant/ReporteMensualService');
+const CrecimientoStatsService = require('../../../../services/Tenant/CrecimientoStatsService');
+
+const PERIODOS_VALIDOS = [7, 30, 90, 180, 365];
 
 class PerfilController {
     // GET /perfil
@@ -60,6 +63,23 @@ class PerfilController {
         } catch (error) {
             console.error('Error actualizando perfil:', error);
             res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    // GET /perfil/api/crecimiento
+    static async crecimiento(req, res) {
+        try {
+            const tenantId = req.tenant.id;
+            const periodoDias = PERIODOS_VALIDOS.includes(parseInt(req.query.periodo, 10))
+                ? parseInt(req.query.periodo, 10)
+                : 30;
+
+            const stats = await CrecimientoStatsService.getCrecimientoStats(tenantId, { periodoDias });
+
+            res.json(stats);
+        } catch (error) {
+            console.error('Error al cargar el panel de crecimiento del tenant:', error);
+            res.status(500).json({ success: false, message: 'Error al cargar el panel de crecimiento' });
         }
     }
 
