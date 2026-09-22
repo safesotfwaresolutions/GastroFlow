@@ -28,7 +28,10 @@ $(function () {
         $('#service_id').val(s.id);
         $('#nombre').val(s.nombre);
         $('#descripcion').val(s.descripcion);
-        $('#precio').val(MoneyInput.format(String(s.precio ?? 0)));
+        // s.precio viene del DECIMAL crudo de MySQL vía data-servicio (ej. "3000.00") --
+        // sin pasarlo por Number() antes, digitsOnly() se traga el ".00" como 2 dígitos
+        // más y el precio queda multiplicado por 100 al guardar sin querer.
+        $('#precio').val(MoneyInput.format(String(Math.round(Number(s.precio) || 0))));
         $('#es_externo').prop('checked', !!s.es_externo);
         $('#activo').prop('checked', !!s.activo);
         modal.show();

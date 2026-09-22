@@ -390,7 +390,12 @@ async function abrirEditarInsumo(id) {
         document.getElementById('editStockMinimo').value = item.stock_minimo || 0;
 
         document.getElementById('editCantidadCompra').value = item.cantidad_compra || 1;
-        document.getElementById('editPrecioCompra').value = MoneyInput.format(String(item.precio_compra || 0));
+        // item.precio_compra es el DECIMAL crudo de MySQL (ej. "5000.00") -- hay que
+        // pasarlo por Number() antes de formatearlo, si no digitsOnly() se traga el
+        // ".00" como 2 dígitos más y multiplica el precio por 100 al guardar.
+        document.getElementById('editPrecioCompra').value = MoneyInput.format(
+            String(Math.round(Number(item.precio_compra) || 0))
+        );
         document.getElementById('editRendimiento').value = item.rendimiento_pct != null ? item.rendimiento_pct : 100;
 
         const selectMedida = document.getElementById('editUnidadMedidaId');
@@ -401,7 +406,9 @@ async function abrirEditarInsumo(id) {
         const container = document.getElementById('editContainerPrecioVenta');
         if (item.categoria_nombre === 'Cerámicas') {
             container.classList.remove('d-none');
-            document.getElementById('editPrecioVenta').value = MoneyInput.format(String(item.precio_venta || 0));
+            document.getElementById('editPrecioVenta').value = MoneyInput.format(
+                String(Math.round(Number(item.precio_venta) || 0))
+            );
         } else {
             container.classList.add('d-none');
         }

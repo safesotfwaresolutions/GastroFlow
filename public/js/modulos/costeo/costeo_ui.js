@@ -398,7 +398,11 @@ $(function () {
       const margenMinimo = document.getElementById('configMargenMinimoAlerta');
       if (margenMinimo) margenMinimo.value = config.margen_minimo_alerta ?? 30;
       const gananciaDeseada = document.getElementById('configGananciaDeseada');
-      if (gananciaDeseada) gananciaDeseada.value = MoneyInput.format(String(config.ganancia_neta_deseada_mensual ?? 0));
+      // config.ganancia_neta_deseada_mensual es el DECIMAL crudo de MySQL -- hay que
+      // pasarlo por Number() antes de formatear, si no se multiplica x100 al guardar.
+      if (gananciaDeseada) {
+        gananciaDeseada.value = MoneyInput.format(String(Math.round(Number(config.ganancia_neta_deseada_mensual) || 0)));
+      }
       toggleConfigRows(config.metodo_indirectos);
       togglePrecioRows(config.metodo_precio);
       if (config.metodo_indirectos === 'costo_fijo') loadCostosFijos();
@@ -492,7 +496,11 @@ $(function () {
         if (!cf) return;
         document.getElementById('costoFijoId').value = cf.id;
         document.getElementById('costoFijoNombre').value = cf.nombre || '';
-        document.getElementById('costoFijoMonto').value = MoneyInput.format(String(cf.monto_mensual != null ? cf.monto_mensual : '0'));
+        // cf.monto_mensual es el DECIMAL crudo de MySQL -- Number() primero, si no
+        // digitsOnly() se traga el ".00" y el monto queda x100 al guardar.
+        document.getElementById('costoFijoMonto').value = MoneyInput.format(
+          String(Math.round(Number(cf.monto_mensual) || 0))
+        );
         document.getElementById('costoFijoActivo').checked = cf.activo;
         document.getElementById('modalCostoFijoTitle').textContent = 'Editar costo fijo';
         new bootstrap.Modal(document.getElementById('modalCostoFijo')).show();

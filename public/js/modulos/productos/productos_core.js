@@ -296,7 +296,14 @@ class ProductManager {
       document.getElementById('codigo').value = producto.codigo;
       document.getElementById('nombre').value = producto.nombre;
       document.getElementById('categoriaId').value = producto.categoria_id || '';
-      document.getElementById('precioUnidad').value = MoneyInput.format(String(producto.precio_unidad ?? 0));
+      // producto.precio_unidad viene del backend como el DECIMAL crudo de MySQL
+      // (ej. "14000.00" con el .00 de centavos que acá nunca se usan) -- pasarlo
+      // directo a MoneyInput.format() sin convertirlo a Number primero hace que
+      // digitsOnly() se trague el ".00" como 2 dígitos más, multiplicando por
+      // 100 cada vez que se abre y se guarda sin querer.
+      document.getElementById('precioUnidad').value = MoneyInput.format(
+        String(Math.round(Number(producto.precio_unidad) || 0))
+      );
       if (document.getElementById('tributo')) {
         document.getElementById('tributo').value = producto.tributo || '';
       }
